@@ -249,7 +249,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "6";
+const VERSION = "7";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -942,7 +942,9 @@ function setupCapture() {
 }
 
 function submit() {
-  const cap = $("#cap"); const text = cap.value.trim();
+  const cap = $("#cap");
+  stopListening();                 // Diktat beenden, sonst schreibt es den alten Text zurück
+  const text = cap.value.trim();
   if (!text || busy) return;
   if (ls.get("tts", true)) unlockSpeech();
   cap.value = ""; cap.style.height = "auto";
@@ -1046,6 +1048,7 @@ function startListening(auto) {
   const base = cap.value ? cap.value.trim() + " " : "";
   let heard = "", silence = null;
   r.onresult = (e) => {
+    if (rec !== r) return;         // nach dem Senden eintreffende Reste ignorieren
     let txt = "";
     for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
     heard = txt; cap.value = base + txt; grow();
@@ -1057,9 +1060,10 @@ function startListening(auto) {
   };
   r.onend = () => {
     clearTimeout(silence);
-    if (rec === r) rec = null;
+    const wasActive = rec === r;
+    if (wasActive) rec = null;
     mic.classList.remove("rec", "listen");
-    if (auto && heard.trim() && ls.get("handsfree", false)) submit();
+    if (wasActive && auto && heard.trim() && ls.get("handsfree", false)) submit();
     else if (!auto) cap.focus();
   };
   try { r.start(); rec = r; mic.classList.add(auto ? "listen" : "rec"); }
