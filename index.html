@@ -278,7 +278,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "9";
+const VERSION = "10";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -354,6 +354,7 @@ const S = {
   pending: null,       // gerade gesendete Nachricht
   names: {},           // eigene Agenten-Namen (Einstellungen)
   templates: {},       // Vorlagen je Agent
+  voices: {},          // gewählte Stimme je Agent
 };
 
 function show(id) { ["setup", "login", "app"].forEach((x) => $("#" + x).classList.toggle("hidden", x !== id)); }
@@ -703,6 +704,8 @@ async function loadSettings() {
   S.names = (n && n.value) || {};
   S.templates = {};
   (data || []).filter((x) => x.key.startsWith("template:")).forEach((x) => { if (x.value?.text) S.templates[x.key.slice(9)] = x.value.text; });
+  S.voices = {};
+  (data || []).filter((x) => x.key.startsWith("voice:")).forEach((x) => { if (x.value?.id) S.voices[x.key.slice(6)] = x.value; });
 }
 async function saveNames() {
   const { data: { user } } = await sb.auth.getUser();
@@ -770,6 +773,7 @@ function viewAgents(m) {
   h += `<div class="pillrow">
     ${hasSR() ? `<button id="talk" class="pill on" style="background:var(--accent);border-color:var(--accent);color:#fff">Mit ${esc(a === "zukunft" ? "deinem Zukunfts-Ich" : agentName(a))} sprechen</button>` : ""}
     <button id="notes" class="pill">Gemerktes ${(S.notes[a] || []).length}</button>
+    <button id="vpick" class="pill">Stimme${S.voices[a] ? ": " + esc(S.voices[a].name) : ""}</button>
     <button id="tpl" class="pill ${S.templates[a] ? "on" : ""}">${S.templates[a] ? "Vorlage aktiv" : "Vorlage"}</button>
   </div>`;
   const quick = S.templates[a] ? [["Nach Vorlage", a === "zukunft" ? "Lass uns meinen Journal-Eintrag nach meiner Vorlage durchgehen." : "Lass uns nach meiner Vorlage vorgehen."], ...def.quick] : def.quick;
@@ -803,9 +807,10 @@ function viewAgents(m) {
     if (text.endsWith(":")) { const cap = $("#cap"); cap.value = text + " "; cap.focus(); cap.dispatchEvent(new Event("input")); }
     else { unlockSpeech(); askAgent(text); }
   });
-  m.querySelectorAll("[data-say]").forEach((b) => b.onclick = () => speak(msgs[+b.dataset.say].content, true));
+  m.querySelectorAll("[data-say]").forEach((b) => b.onclick = () => { unlockSpeech(); speak(msgs[+b.dataset.say].content, true, null, a); });
   const tk = $("#talk"); if (tk) tk.onclick = () => openVoice(a);
   $("#tpl").onclick = () => openTemplate(a);
+  $("#vpick").onclick = () => openVoicePicker(a);
   $("#notes").onclick = () => openNotes(a);
   if ($("#rename")) $("#rename").onclick = async () => {
     const n = prompt(`Name für ${def.label}`, agentName(a));
@@ -1001,7 +1006,7 @@ async function vSend(text) {
     if (!V) return;
     const reply = data.reply || "Erledigt.";
     vSet("speaking", "Spricht – tippe, um zu unterbrechen", reply);
-    speak(reply, true, () => { if (V && V.state === "speaking") { V.state = ""; setTimeout(vListen, 300); } });
+    speak(reply, true, () => { if (V && V.state === "speaking") { V.state = ""; setTimeout(vListen, 300); } }, agent);
   } catch (e) {
     vSet("paused", "Keine Antwort – tippe, um es nochmal zu versuchen.", String(e.message || e).slice(0, 120));
   }
@@ -1016,23 +1021,113 @@ function pickVoice() {
   return vs.sort((x, y) => rank(x) - rank(y))[0] || null;
 }
 if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { voice = pickVoice(); };
-function unlockSpeech() {
-  // iOS gibt Sprachausgabe erst nach einer Nutzeraktion frei
-  if (!window.speechSynthesis || unlockSpeech.done) return;
-  try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); unlockSpeech.done = true; } catch {}
+// ---- Sprachausgabe: menschliche Stimme (ElevenLabs/OpenAI über Funktion "tts"), sonst Gerätestimme ----
+let player = null, cloudTTS = null, speakToken = 0, ttsHint = false;
+function silentWav() {
+  const n = 800, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 16000, true); v.setUint32(28, 32000, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
 }
-function stopSpeaking() { try { window.speechSynthesis && speechSynthesis.cancel(); } catch {} }
-function speak(text, force, onDone) {
-  if (!window.speechSynthesis || (!force && !ls.get("tts", true))) { onDone && onDone(); return; }
+function getPlayer() { if (!player) { player = new Audio(); player.setAttribute("playsinline", ""); player.preload = "auto"; } return player; }
+function unlockSpeech() {
+  // iOS gibt Ton erst nach einer Nutzeraktion frei – einmal still abspielen
+  if (unlockSpeech.done) return;
+  unlockSpeech.done = true;
+  try { const p = getPlayer(); p.src = silentWav(); const r = p.play(); if (r) r.catch(() => {}); } catch {}
+  try { if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); } } catch {}
+}
+function stopSpeaking() {
+  speakToken++;
+  try { if (player) player.pause(); } catch {}
+  try { window.speechSynthesis && speechSynthesis.cancel(); } catch {}
+}
+async function ttsFetch(body) {
+  const { data: { session } } = await sb.auth.getSession();
+  return fetch(`${SB_URL}/functions/v1/tts`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session?.access_token || ""}`, apikey: SB_KEY, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+async function speak(text, force, onDone, agent, voiceId) {
   stopSpeaking();
-  const clean = String(text || "").replace(/\*\*/g, "").replace(/^[-•]\s*/gm, "").replace(/€/g, " Euro").replace(/\s+/g, " ").trim();
-  // in Sätze teilen – lange Texte brechen auf manchen Geräten sonst ab
-  const parts = clean.match(/[^.!?]+[.!?]*/g) || [clean];
+  const my = speakToken;
+  const done = () => { if (my === speakToken && onDone) onDone(); };
+  const clean = String(text || "").replace(/\*\*/g, "").replace(/^[-•]\s*/gm, "").replace(/\s+/g, " ").trim();
+  if (!clean) return done();
+  if (cloudTTS !== false) {
+    try {
+      const r = await ttsFetch({ text: clean, agent: agent || S.agent, voice: voiceId || undefined });
+      if (my !== speakToken) return;
+      if (r.status === 501) { cloudTTS = false; }
+      else if (!r.ok) { throw new Error((await r.text()).slice(0, 150)); }
+      else {
+        const blob = await r.blob();
+        if (my !== speakToken) return;
+        cloudTTS = true;
+        const p = getPlayer(), url = URL.createObjectURL(blob);
+        p.onended = () => { URL.revokeObjectURL(url); done(); };
+        p.onerror = () => done();
+        p.src = url;
+        await p.play();
+        return;
+      }
+    } catch (e) {
+      if (my !== speakToken) return;
+      console.warn("Stimme:", e);
+      if (!ttsHint) { ttsHint = true; toast("Menschliche Stimme gerade nicht erreichbar"); }
+    }
+  }
+  if (cloudTTS === false && !ttsHint) { ttsHint = true; toast("Menschliche Stimme noch nicht eingerichtet – vorerst Gerätestimme"); }
+  deviceSpeak(clean, done, my);
+}
+function deviceSpeak(clean, done, my) {
+  if (!window.speechSynthesis) return done();
+  const parts = clean.replace(/€/g, " Euro").match(/[^.!?]+[.!?]*/g) || [clean];
   voice = voice || pickVoice();
-  parts.forEach((p, i) => {
-    const u = new SpeechSynthesisUtterance(p.trim()); u.lang = "de-DE"; if (voice) u.voice = voice; u.rate = 1.0;
-    if (i === parts.length - 1 && onDone) { u.onend = () => onDone(); u.onerror = () => onDone(); }
+  parts.forEach((part, i) => {
+    const u = new SpeechSynthesisUtterance(part.trim()); u.lang = "de-DE"; if (voice) u.voice = voice;
+    if (i === parts.length - 1) { u.onend = () => { if (my === speakToken) done(); }; u.onerror = u.onend; }
     speechSynthesis.speak(u);
+  });
+}
+
+// ---- Stimme je Agent auswählen ----
+async function openVoicePicker(a) {
+  const nm = a === "zukunft" ? "Zukunfts-Ich" : agentName(a);
+  const root = $("#sheet-root");
+  root.innerHTML = `<div class="sheet-bg"><div class="sheet">
+    <div class="sheet-head"><span></span><h2>Stimme · ${esc(nm)}</h2><button id="vp-close" class="strong">Fertig</button></div>
+    <div id="vp-body"><div class="empty"><span class="spin"></span>Stimmen werden geladen …</div></div></div></div>`;
+  const close = () => { stopSpeaking(); root.innerHTML = ""; };
+  root.querySelector(".sheet-bg").onclick = (e) => { if (e.target.classList.contains("sheet-bg")) close(); };
+  $("#vp-close").onclick = close;
+  let res;
+  try { res = await ttsFetch({ list_voices: true }); } catch { res = null; }
+  const body = $("#vp-body"); if (!body) return;
+  if (!res || res.status === 501) {
+    body.innerHTML = `<p style="font-size:14.5px;line-height:1.5">Für eine menschliche Stimme fehlt noch der Schlüssel eines Sprachdienstes.</p>
+      <p style="font-size:14px;color:var(--muted);line-height:1.5">Empfohlen: ElevenLabs (Tarif „Starter“). Den API-Schlüssel in Supabase unter Edge Functions → Secrets als <b>ELEVENLABS_API_KEY</b> eintragen. Alternativ OpenAI als <b>OPENAI_API_KEY</b>.</p>`;
+    return;
+  }
+  const d = await res.json();
+  if (d.error) { body.innerHTML = `<div class="empty">${esc(d.error)}</div>`; return; }
+  const cur = S.voices[a]?.id;
+  body.innerHTML = `<p style="font-size:13.5px;color:var(--muted);margin:0 0 10px">${d.provider === "elevenlabs" ? "Stimmen aus deinem ElevenLabs-Konto. Eigene oder geklonte Stimmen erscheinen hier automatisch." : "OpenAI-Stimmen."}</p>
+    <div class="list">${(d.voices || []).map((v) => `<div class="row" style="cursor:default">
+      <span class="name">${esc(v.name)}${v.id === cur ? ' <b style="color:var(--accent)">· gewählt</b>' : ""}${v.info ? `<br><small style="color:var(--muted)">${esc(v.info)}</small>` : ""}</span>
+      <button class="link-btn" data-try="${esc(v.id)}" style="padding:0 6px">Anhören</button>
+      <button class="link-btn" data-pick="${esc(v.id)}" data-name="${esc(v.name)}" style="padding:0 0 0 6px;font-weight:600">Wählen</button></div>`).join("")}</div>`;
+  const sample = a === "zukunft" ? "Hey, ich bin's. Erzähl mal – wie war dein Tag wirklich?" : `Hallo Niclas, hier ist ${nm}. Woran arbeiten wir heute?`;
+  body.querySelectorAll("[data-try]").forEach((b) => b.onclick = () => { unlockSpeech(); speak(sample, true, null, a, b.dataset.try); });
+  body.querySelectorAll("[data-pick]").forEach((b) => b.onclick = async () => {
+    const { data: { user } } = await sb.auth.getUser();
+    const val = { id: b.dataset.pick, name: b.dataset.name };
+    await sb.from("settings").upsert({ user_id: user.id, key: `voice:${a}`, value: val, updated_at: new Date().toISOString() });
+    S.voices[a] = val; toast(`Stimme: ${val.name}`); close(); render();
   });
 }
 
