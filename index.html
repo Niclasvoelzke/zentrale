@@ -278,7 +278,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "8";
+const VERSION = "9";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -353,6 +353,7 @@ const S = {
   investments: [],
   pending: null,       // gerade gesendete Nachricht
   names: {},           // eigene Agenten-Namen (Einstellungen)
+  templates: {},       // Vorlagen je Agent
 };
 
 function show(id) { ["setup", "login", "app"].forEach((x) => $("#" + x).classList.toggle("hidden", x !== id)); }
@@ -700,6 +701,8 @@ async function loadSettings() {
   const { data } = await sb.from("settings").select("key,value");
   const n = (data || []).find((x) => x.key === "agent_names");
   S.names = (n && n.value) || {};
+  S.templates = {};
+  (data || []).filter((x) => x.key.startsWith("template:")).forEach((x) => { if (x.value?.text) S.templates[x.key.slice(9)] = x.value.text; });
 }
 async function saveNames() {
   const { data: { user } } = await sb.auth.getUser();
@@ -767,8 +770,10 @@ function viewAgents(m) {
   h += `<div class="pillrow">
     ${hasSR() ? `<button id="talk" class="pill on" style="background:var(--accent);border-color:var(--accent);color:#fff">Mit ${esc(a === "zukunft" ? "deinem Zukunfts-Ich" : agentName(a))} sprechen</button>` : ""}
     <button id="notes" class="pill">Gemerktes ${(S.notes[a] || []).length}</button>
+    <button id="tpl" class="pill ${S.templates[a] ? "on" : ""}">${S.templates[a] ? "Vorlage aktiv" : "Vorlage"}</button>
   </div>`;
-  h += `<div class="quick">${def.quick.map(([l], i) => `<button data-q="${i}">${esc(l)}</button>`).join("")}</div>`;
+  const quick = S.templates[a] ? [["Nach Vorlage", a === "zukunft" ? "Lass uns meinen Journal-Eintrag nach meiner Vorlage durchgehen." : "Lass uns nach meiner Vorlage vorgehen."], ...def.quick] : def.quick;
+  h += `<div class="quick">${quick.map(([l], i) => `<button data-q="${i}">${esc(l)}</button>`).join("")}</div>`;
   h += `<div class="chat">`;
   if (!msgs.length && !S.pending) h += `<div class="empty">Noch kein Gespräch. Tippe oder sprich unten los.</div>`;
   let lastDay = "";
@@ -794,12 +799,13 @@ function viewAgents(m) {
   m.innerHTML = h;
 
   m.querySelectorAll("[data-q]").forEach((b) => b.onclick = () => {
-    const text = def.quick[+b.dataset.q][1];
+    const text = quick[+b.dataset.q][1];
     if (text.endsWith(":")) { const cap = $("#cap"); cap.value = text + " "; cap.focus(); cap.dispatchEvent(new Event("input")); }
     else { unlockSpeech(); askAgent(text); }
   });
   m.querySelectorAll("[data-say]").forEach((b) => b.onclick = () => speak(msgs[+b.dataset.say].content, true));
   const tk = $("#talk"); if (tk) tk.onclick = () => openVoice(a);
+  $("#tpl").onclick = () => openTemplate(a);
   $("#notes").onclick = () => openNotes(a);
   if ($("#rename")) $("#rename").onclick = async () => {
     const n = prompt(`Name für ${def.label}`, agentName(a));
@@ -812,6 +818,63 @@ function viewAgents(m) {
     if (!confirm((a === "zukunft" ? "Gesamtes Journal löschen? Das lässt sich nicht rückgängig machen." : `Gesprächsverlauf mit ${agentName(a)} löschen? Gemerktes bleibt erhalten.`))) return;
     await sb.from("messages").delete().eq("agent", a); S.msgs[a] = []; render();
   };
+}
+
+
+// ============================================================
+// Vorlage je Agent (Text, Foto oder PDF)
+// ============================================================
+function openTemplate(a) {
+  const nm = a === "zukunft" ? "Journal" : agentName(a);
+  const root = $("#sheet-root");
+  root.innerHTML = `<div class="sheet-bg"><div class="sheet">
+    <div class="sheet-head"><button id="t-cancel">Abbrechen</button><h2>Vorlage · ${esc(nm)}</h2><button id="t-save" class="strong">Sichern</button></div>
+    <p style="color:var(--muted);font-size:13.5px;margin:0 0 10px">${a === "zukunft"
+      ? "Deine Journal-Vorlage: Abschnitte und Fragen in deiner Reihenfolge. Dein Zukunfts-Ich geht sie mit dir Punkt für Punkt durch."
+      : "Ein Ablauf oder Leitfaden, nach dem der Agent mit dir arbeiten soll."}</p>
+    <div class="btns" style="justify-content:flex-start;margin:0 0 10px">
+      <label class="btn" style="cursor:pointer">Foto oder PDF<input id="t-file" type="file" accept="image/*,application/pdf" style="display:none"></label>
+      <span id="t-busy" style="align-self:center;color:var(--muted);font-size:13.5px"></span>
+    </div>
+    <div class="f"><textarea id="t-text" style="min-height:42vh" placeholder="Zum Beispiel:&#10;1. Wofür bin ich heute dankbar?&#10;2. Was war der wichtigste Moment?&#10;3. Was hat mich Energie gekostet?&#10;4. Was mache ich morgen anders?">${esc(S.templates[a] || "")}</textarea></div>
+    ${S.templates[a] ? `<button class="link-btn" id="t-del" style="color:var(--danger)">Vorlage entfernen</button>` : ""}
+  </div></div>`;
+  const close = () => (root.innerHTML = "");
+  root.querySelector(".sheet-bg").onclick = (e) => { if (e.target.classList.contains("sheet-bg")) close(); };
+  $("#t-cancel").onclick = close;
+  const save = async (text) => {
+    const { data: { user } } = await sb.auth.getUser();
+    await sb.from("settings").upsert({ user_id: user.id, key: `template:${a}`, value: { text }, updated_at: new Date().toISOString() });
+    if (text) S.templates[a] = text; else delete S.templates[a];
+    close(); render(); toast(text ? "Vorlage gespeichert" : "Vorlage entfernt");
+  };
+  $("#t-save").onclick = () => save($("#t-text").value.trim());
+  const del = $("#t-del"); if (del) del.onclick = () => save("");
+  $("#t-file").onchange = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const busyEl = $("#t-busy"); busyEl.innerHTML = '<span class="spin"></span>wird ausgelesen …';
+    try {
+      const payload = await fileToPayload(file);
+      const { data, error } = await sb.functions.invoke("agent", { body: { extract: payload } });
+      if (error || data?.error) throw new Error(data?.error || (await errText(error)));
+      const ta = $("#t-text");
+      ta.value = (ta.value.trim() ? ta.value.trim() + "\n\n" : "") + (data.text || "");
+      busyEl.textContent = "Ausgelesen – bitte kurz prüfen und sichern.";
+    } catch (err) { busyEl.textContent = "Auslesen fehlgeschlagen: " + String(err.message || err).slice(0, 80); }
+  };
+}
+async function fileToPayload(file) {
+  if (file.type === "application/pdf") {
+    if (file.size > 8 * 1024 * 1024) throw new Error("PDF ist größer als 8 MB");
+    const b64 = await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = fail; r.readAsDataURL(file); });
+    return { data: b64, media_type: "application/pdf" };
+  }
+  // Fotos verkleinern (schneller, günstiger)
+  const img = await new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = URL.createObjectURL(file); });
+  const max = 1600, k = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return { data: c.toDataURL("image/jpeg", 0.85).split(",")[1], media_type: "image/jpeg" };
 }
 
 function openNotes(a) {
