@@ -278,7 +278,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "10";
+const VERSION = "11";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -1110,13 +1110,13 @@ async function openVoicePicker(a) {
   const body = $("#vp-body"); if (!body) return;
   if (!res || res.status === 501) {
     body.innerHTML = `<p style="font-size:14.5px;line-height:1.5">Für eine menschliche Stimme fehlt noch der Schlüssel eines Sprachdienstes.</p>
-      <p style="font-size:14px;color:var(--muted);line-height:1.5">Empfohlen: ElevenLabs (Tarif „Starter“). Den API-Schlüssel in Supabase unter Edge Functions → Secrets als <b>ELEVENLABS_API_KEY</b> eintragen. Alternativ OpenAI als <b>OPENAI_API_KEY</b>.</p>`;
+      <p style="font-size:14px;color:var(--muted);line-height:1.5">Empfohlen: Google „Chirp 3 HD“ (1 Mio. Zeichen im Monat kostenlos). Den API-Schlüssel in Supabase unter Edge Functions → Secrets als <b>GOOGLE_TTS_API_KEY</b> eintragen.</p>`;
     return;
   }
   const d = await res.json();
   if (d.error) { body.innerHTML = `<div class="empty">${esc(d.error)}</div>`; return; }
   const cur = S.voices[a]?.id;
-  body.innerHTML = `<p style="font-size:13.5px;color:var(--muted);margin:0 0 10px">${d.provider === "elevenlabs" ? "Stimmen aus deinem ElevenLabs-Konto. Eigene oder geklonte Stimmen erscheinen hier automatisch." : "OpenAI-Stimmen."}</p>
+  body.innerHTML = `<p style="font-size:13.5px;color:var(--muted);margin:0 0 10px">${d.provider === "elevenlabs" ? "Stimmen aus deinem ElevenLabs-Konto. Eigene oder geklonte Stimmen erscheinen hier automatisch." : d.provider === "google" ? "Deutsche Google-Stimmen (Chirp 3 HD). Einfach durchhören." : "OpenAI-Stimmen."}</p>
     <div class="list">${(d.voices || []).map((v) => `<div class="row" style="cursor:default">
       <span class="name">${esc(v.name)}${v.id === cur ? ' <b style="color:var(--accent)">· gewählt</b>' : ""}${v.info ? `<br><small style="color:var(--muted)">${esc(v.info)}</small>` : ""}</span>
       <button class="link-btn" data-try="${esc(v.id)}" style="padding:0 6px">Anhören</button>
