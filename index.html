@@ -169,6 +169,34 @@ details.depot .pos small{color:var(--muted);display:block}
 
 .round.listen{background:var(--accent);border-color:var(--accent);color:#fff}
 
+.round.vstart{background:var(--accent);border-color:var(--accent);color:#fff}
+.vbtn{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);margin-left:2px}
+.vbtn svg{width:18px;height:18px}
+
+/* Sprechmodus (Vollbild) */
+.vmode{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;align-items:center;
+  padding:calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 22px)}
+.vmode .who{font-size:18px;font-weight:600;text-align:center}
+.vmode .role{color:var(--muted);font-size:14px;text-align:center;margin-top:2px}
+.vmode .stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;width:100%;min-height:0}
+.orb{width:170px;height:170px;border-radius:50%;border:0;background:radial-gradient(circle at 35% 30%,#5f8fb8,var(--accent) 60%,#173c58);
+  box-shadow:0 10px 40px rgba(36,91,132,.35);transition:transform .25s}
+.orb.listening{animation:breathe 1.6s ease-in-out infinite}
+.orb.thinking{animation:think 1.1s ease-in-out infinite;filter:saturate(.6)}
+.orb.speaking{animation:talk .45s ease-in-out infinite alternate}
+.orb.paused{filter:grayscale(.8);opacity:.6}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@keyframes think{0%,100%{transform:scale(.94);opacity:.75}50%{transform:scale(1);opacity:1}}
+@keyframes talk{from{transform:scale(1)}to{transform:scale(1.12)}}
+.vmode .state{font-size:15px;color:var(--muted);text-align:center;min-height:20px}
+.vmode .sub{font-size:17px;line-height:1.45;text-align:center;max-height:32vh;overflow:auto;width:100%;max-width:520px;color:var(--text)}
+.vmode .sub.me{color:var(--muted)}
+.vmode .ctrl{display:flex;gap:28px;align-items:center}
+.vmode .ctrl button{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--text)}
+.vmode .ctrl button svg{width:24px;height:24px}
+.vmode .ctrl .end{background:var(--danger);border-color:var(--danger);color:#fff}
+.vmode .ctrl small{display:block;text-align:center;font-size:11.5px;color:var(--muted);margin-top:6px}
+
 /* Login */
 .center{min-height:80vh;display:grid;place-items:center}
 .card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px}
@@ -231,6 +259,7 @@ details.depot .pos small{color:var(--muted);display:block}
         <button class="round hidden" id="mic" title="Diktieren" aria-label="Diktieren">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
         </button>
+        <button class="round vstart hidden" id="vstart" title="Sprechen" aria-label="Sprechmodus starten"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg></button>
         <button class="round primary" id="send" title="Senden" aria-label="Senden">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         </button>
@@ -249,7 +278,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "7";
+const VERSION = "8";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -462,6 +491,7 @@ function render() {
   $("#tabbar").innerHTML = VIEWS.map(([k, l]) =>
     `<button data-view="${k}" class="${active === k ? "on" : ""}" aria-label="${l}">${ICON[k]}<span>${l}</span>${c[k] ? `<span class="b">${c[k]}</span>` : ""}</button>`).join("");
   $("#tabbar").querySelectorAll("button").forEach((b) => b.onclick = () => goTab(b.dataset.view));
+  updateSendBtn();
   $("#cap").placeholder = inChat() ? (S.agent === "zukunft" ? "Journal-Eintrag …" : `Nachricht an ${agentName(S.agent)} …`) : "Zuruf an die Zentrale …";
   const back = (S.view === "bereiche" && S.stack.length) || S.view === "eingang" || S.view === "erledigt" || inChat();
   $("#back").classList.toggle("hidden", !back);
@@ -708,11 +738,12 @@ function viewAgentList(m) {
     const sub = last ? (last.role === "user" ? "Du: " : "") + String(last.content).replace(/\s+/g, " ").slice(0, 80) : (k === "zukunft" ? "Gespräch mit deinem Zukunfts-Ich" : d.short);
     return `<div class="row" data-agent="${k}"><span class="av">${esc(nm[0])}</span>
       <span class="who"><b>${esc(nm)}${k !== "zukunft" ? ` <span style="font-weight:400;color:var(--muted);font-size:13px">· ${esc(d.label)}</span>` : ""}</b><small>${esc(sub)}</small></span>
-      ${last ? `<span class="cnt">${ago(last.created_at)}</span>` : ""}<span class="chev">›</span></div>`;
+      ${last ? `<span class="cnt">${ago(last.created_at)}</span>` : ""}${hasSR() ? `<button class="vbtn" data-voice="${k}" aria-label="Sprechen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg></button>` : `<span class="chev">›</span>`}</div>`;
   };
   m.innerHTML = `<div class="section"><span>Persönlich</span></div><div class="list agents">${["assistenz", "zukunft"].map(row).join("")}</div>
     <div class="section"><span>Beratung</span></div><div class="list agents">${["cfo", "investor", "vertrieb", "marketing", "hr"].map(row).join("")}</div>`;
   m.querySelectorAll("[data-agent]").forEach((r) => r.onclick = () => startAgent(r.dataset.agent));
+  m.querySelectorAll("[data-voice]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openVoice(b.dataset.voice); });
 }
 
 function viewAgents(m) {
@@ -733,11 +764,8 @@ function viewAgents(m) {
     </details>`;
   }
 
-  const tts = ls.get("tts", true);
-  const hf = ls.get("handsfree", false);
   h += `<div class="pillrow">
-    <button id="tts" class="pill ${tts ? "on" : ""}">${tts ? "Sprechen an" : "Sprechen aus"}</button>
-    ${hasSR() ? `<button id="hf" class="pill ${hf ? "on" : ""}">${hf ? "Freihändig an" : "Freihändig aus"}</button>` : ""}
+    ${hasSR() ? `<button id="talk" class="pill on" style="background:var(--accent);border-color:var(--accent);color:#fff">Mit ${esc(a === "zukunft" ? "deinem Zukunfts-Ich" : agentName(a))} sprechen</button>` : ""}
     <button id="notes" class="pill">Gemerktes ${(S.notes[a] || []).length}</button>
   </div>`;
   h += `<div class="quick">${def.quick.map(([l], i) => `<button data-q="${i}">${esc(l)}</button>`).join("")}</div>`;
@@ -771,14 +799,7 @@ function viewAgents(m) {
     else { unlockSpeech(); askAgent(text); }
   });
   m.querySelectorAll("[data-say]").forEach((b) => b.onclick = () => speak(msgs[+b.dataset.say].content, true));
-  $("#tts").onclick = () => { const on = !ls.get("tts", true); ls.set("tts", on); if (on) unlockSpeech(); else { stopSpeaking(); ls.set("handsfree", false); } render(); };
-  const hfb = $("#hf");
-  if (hfb) hfb.onclick = () => {
-    const on = !ls.get("handsfree", false); ls.set("handsfree", on);
-    if (on) { ls.set("tts", true); unlockSpeech(); toast("Freihändig: Tippe einmal aufs Mikrofon, dann läuft das Gespräch."); }
-    else { stopListening(); }
-    render();
-  };
+  const tk = $("#talk"); if (tk) tk.onclick = () => openVoice(a);
   $("#notes").onclick = () => openNotes(a);
   if ($("#rename")) $("#rename").onclick = async () => {
     const n = prompt(`Name für ${def.label}`, agentName(a));
@@ -820,6 +841,109 @@ function openNotes(a) {
   };
 }
 
+
+// ============================================================
+// Sprechmodus: zuhören → antworten (laut) → wieder zuhören
+// ============================================================
+let V = null, vrec = null;
+const ICON_MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+const ICON_MICOFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3l18 18M9 9v2a3 3 0 0 0 5.1 2.1M15 10V6a3 3 0 0 0-5.7-1.3M5 11a7 7 0 0 0 11.7 5.2M19 11a7 7 0 0 1-.6 2.8M12 18v3"/></svg>';
+const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+function openVoice(agent) {
+  if (!hasSR()) { toast("Spracherkennung wird auf diesem Gerät nicht unterstützt."); return; }
+  stopListening(); stopSpeaking(); unlockSpeech();
+  if (agent && AGENTS[agent]) { S.agent = agent; ls.set("agent", agent); }
+  S.view = "agenten"; S.agentOpen = true; ls.set("view", "agenten"); ls.set("agentOpen", true);
+  render(); loadAgent(S.agent).then(() => { render(); scrollChat(); });
+  const a = S.agent, nm = a === "zukunft" ? "Zukunfts-Ich" : agentName(a);
+  const el = document.createElement("div");
+  el.className = "vmode"; el.id = "voice";
+  el.innerHTML = `<div><div class="who">${esc(nm)}</div><div class="role">${esc(a === "zukunft" ? "Journal" : AGENTS[a].label)}</div></div>
+    <div class="stage"><button class="orb" id="v-orb" aria-label="Sprechen"></button><div class="state" id="v-state"></div><div class="sub" id="v-sub"></div></div>
+    <div class="ctrl"><div><button id="v-mute" aria-label="Mikrofon pausieren">${ICON_MIC}</button><small>Pause</small></div>
+      <div><button class="end" id="v-end" aria-label="Beenden">${ICON_X}</button><small>Beenden</small></div></div>`;
+  document.body.appendChild(el);
+  V = { agent: a, state: "", misses: 0 };
+  $("#v-end").onclick = closeVoice;
+  $("#v-orb").onclick = () => {
+    if (!V) return;
+    if (V.state === "speaking") { V.state = ""; stopSpeaking(); vListen(); }
+    else if (V.state === "listening") { if (vrec) try { vrec.stop(); } catch {} }
+    else if (V.state === "paused") { V.misses = 0; vListen(); }
+  };
+  $("#v-mute").onclick = () => {
+    if (!V) return;
+    if (V.state === "paused") { V.misses = 0; vListen(); }
+    else { vStopRec(); stopSpeaking(); vSet("paused", "Pausiert – tippe auf den Kreis, um weiterzusprechen."); }
+  };
+  vListen();
+}
+function closeVoice() {
+  V = null; vStopRec(); stopSpeaking();
+  const el = $("#voice"); if (el) el.remove();
+  render(); scrollChat();
+}
+function vSet(state, label, sub, me) {
+  if (!V) return;
+  V.state = state;
+  const orb = $("#v-orb"); if (!orb) return;
+  orb.className = "orb " + state;
+  $("#v-state").textContent = label || "";
+  const sb2 = $("#v-sub");
+  if (sub !== undefined) { sb2.textContent = sub; sb2.classList.toggle("me", !!me); }
+  const mute = $("#v-mute"); if (mute) mute.innerHTML = state === "paused" ? ICON_MICOFF : ICON_MIC;
+}
+function vStopRec() { if (vrec) { const r = vrec; vrec = null; try { r.abort(); } catch {} } }
+function vListen() {
+  if (!V || vrec || V.state === "thinking") return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const r = new SR(); r.lang = "de-DE"; r.interimResults = true; r.continuous = true;
+  let heard = "", silence = null;
+  r.onresult = (e) => {
+    if (vrec !== r) return;
+    let txt = "";
+    for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+    heard = txt.trim();
+    vSet("listening", "Hört zu …", heard, true);
+    clearTimeout(silence);
+    silence = setTimeout(() => { try { r.stop(); } catch {} }, 1500);
+  };
+  r.onerror = (e) => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") { vrec = null; vSet("paused", "Mikrofon nicht freigegeben – in den iPhone-Einstellungen für Safari erlauben."); }
+  };
+  r.onend = () => {
+    clearTimeout(silence);
+    if (vrec !== r) return;          // bewusst abgebrochen
+    vrec = null;
+    if (!V) return;
+    if (heard) { V.misses = 0; vSend(heard); return; }
+    V.misses++;
+    if (V.misses >= 3) vSet("paused", "Tippe auf den Kreis, um zu sprechen.");
+    else setTimeout(vListen, 250);
+  };
+  try { r.start(); vrec = r; vSet("listening", "Hört zu …", V.misses ? undefined : "", true); }
+  catch { vSet("paused", "Tippe auf den Kreis, um zu sprechen."); }
+}
+async function vSend(text) {
+  if (!V) return;
+  const agent = V.agent;
+  vSet("thinking", "Denkt nach …", text, true);
+  try {
+    const { data, error } = await sb.functions.invoke("agent", { body: { agent, message: text, voice: true } });
+    if (error || data?.error) throw new Error(data?.error || (await errText(error)));
+    loadAgent(agent).then(() => { if (inChat()) { render(); scrollChat(); } });
+    if (data.drafts?.length) showReply({ reply: "Mail-Entwurf zur Freigabe:", actions: [], drafts: data.drafts });
+    scheduleReload();
+    if (!V) return;
+    const reply = data.reply || "Erledigt.";
+    vSet("speaking", "Spricht – tippe, um zu unterbrechen", reply);
+    speak(reply, true, () => { if (V && V.state === "speaking") { V.state = ""; setTimeout(vListen, 300); } });
+  } catch (e) {
+    vSet("paused", "Keine Antwort – tippe, um es nochmal zu versuchen.", String(e.message || e).slice(0, 120));
+  }
+}
+
 // ---- Sprachausgabe (kostenlos, läuft auf dem Gerät) ----
 let voice = null;
 function pickVoice() {
@@ -843,7 +967,7 @@ function speak(text, force, onDone) {
   const parts = clean.match(/[^.!?]+[.!?]*/g) || [clean];
   voice = voice || pickVoice();
   parts.forEach((p, i) => {
-    const u = new SpeechSynthesisUtterance(p.trim()); u.lang = "de-DE"; if (voice) u.voice = voice; u.rate = 1.05;
+    const u = new SpeechSynthesisUtterance(p.trim()); u.lang = "de-DE"; if (voice) u.voice = voice; u.rate = 1.0;
     if (i === parts.length - 1 && onDone) { u.onend = () => onDone(); u.onerror = () => onDone(); }
     speechSynthesis.speak(u);
   });
@@ -931,23 +1055,30 @@ let busy = false;
 function setupCapture() {
   const cap = $("#cap");
   const grow = () => { cap.style.height = "auto"; cap.style.height = Math.min(cap.scrollHeight, 140) + "px"; };
-  cap.addEventListener("input", grow);
+  cap.addEventListener("input", () => { grow(); updateSendBtn(); });
   cap.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
   });
   $("#send").onclick = submit;
+  $("#vstart").onclick = () => openVoice(S.agent);
   $("#add").onclick = () => openSheet(null);
   $("#menu").onclick = openMenu;
   setupMic();
 }
 
+function updateSendBtn() {
+  const empty = !$("#cap").value.trim();
+  const voice = inChat() && empty && hasSR();
+  $("#vstart").classList.toggle("hidden", !voice);
+  $("#send").classList.toggle("hidden", voice);
+}
 function submit() {
   const cap = $("#cap");
   stopListening();                 // Diktat beenden, sonst schreibt es den alten Text zurück
   const text = cap.value.trim();
   if (!text || busy) return;
   if (ls.get("tts", true)) unlockSpeech();
-  cap.value = ""; cap.style.height = "auto";
+  cap.value = ""; cap.style.height = "auto"; updateSendBtn();
   askAgent(text);
 }
 
@@ -985,9 +1116,6 @@ async function askPersona(text) {
     await loadAgent(agent);
     if (inChat() && S.agent === agent) { render(); scrollChat(); }
     if (data.drafts?.length) showReply({ reply: "Mail-Entwurf zur Freigabe:", actions: [], drafts: data.drafts });
-    speak(data.reply, false, () => {
-      if (ls.get("handsfree", false) && inChat() && !document.hidden) setTimeout(() => startListening(true), 350);
-    });
     scheduleReload();
   } catch (e) {
     S.pending = null;
@@ -1063,7 +1191,7 @@ function startListening(auto) {
     const wasActive = rec === r;
     if (wasActive) rec = null;
     mic.classList.remove("rec", "listen");
-    if (wasActive && auto && heard.trim() && ls.get("handsfree", false)) submit();
+    if (wasActive && auto && heard.trim()) submit();
     else if (!auto) cap.focus();
   };
   try { r.start(); rec = r; mic.classList.add(auto ? "listen" : "rec"); }
@@ -1076,7 +1204,7 @@ function setupMic() {
   mic.onclick = () => {
     if (rec) { try { rec.stop(); } catch {} return; }
     unlockSpeech();
-    startListening(inChat() && ls.get("handsfree", false));
+    startListening(false);
   };
 }
 
