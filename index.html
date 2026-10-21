@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zentrale</title>
+<meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141414" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Zentrale">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#f6f6f4; --surface:#ffffff; --text:#1b1b1a; --muted:#6e6d69; --faint:#a3a29d;
+  --line:#e5e4e0; --accent:#245b84; --accent-soft:#e7eef4; --danger:#a33a2c; --warn:#9a6a14;
+  --hi:#b5452f; --radius:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#141414; --surface:#1d1d1c; --text:#ecebe7; --muted:#a09f9a; --faint:#6c6b67;
+    --line:#2d2d2b; --accent:#7fb1d8; --accent-soft:#1f2a33; --danger:#e07a6b; --warn:#d6a54c; --hi:#e07a6b;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;
+  padding-bottom:calc(150px + env(safe-area-inset-bottom))}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+.hidden{display:none!important}
+.wrap{max-width:820px;margin:0 auto;padding:0 16px}
+
+/* Kopf */
+header{position:sticky;top:0;z-index:10;background:var(--bg);padding-top:env(safe-area-inset-top);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:8px;height:48px}
+.bar h1{font-size:17px;font-weight:600;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.back{color:var(--accent);font-size:15px;margin-right:4px}
+.icon-btn{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
+.icon-btn:hover{background:var(--line)}
+.icon-btn svg{width:20px;height:20px}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs button{padding:6px 10px;border-radius:999px;color:var(--muted);font-size:14px;white-space:nowrap}
+nav.tabs button.on{background:var(--text);color:var(--bg)}
+nav.tabs .n{margin-left:5px;font-size:12px;opacity:.7}
+
+/* Listen */
+main{padding-top:6px}
+.section{margin:18px 0 6px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+.section.over{color:var(--danger)}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.task{display:flex;align-items:flex-start;gap:12px;padding:11px 12px;border-top:1px solid var(--line);position:relative}
+.task:first-child{border-top:0}
+.task.p1::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 2px 2px 0;background:var(--hi)}
+.check{flex:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--faint);margin-top:1px;display:grid;place-items:center}
+.check:hover{border-color:var(--accent)}
+.task.done .check{background:var(--accent);border-color:var(--accent)}
+.task.done .check::after{content:"";width:5px;height:9px;border:solid var(--surface);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.task.done .t{color:var(--faint);text-decoration:line-through}
+.tbody{flex:1;min-width:0;cursor:pointer}
+.t{word-wrap:break-word}
+.m{font-size:12.5px;color:var(--muted);margin-top:2px;display:flex;flex-wrap:wrap;gap:0 10px}
+.m .due.over{color:var(--danger)} .m .due.today{color:var(--accent)}
+.m .st{color:var(--warn)}
+.row{display:flex;align-items:center;gap:10px;padding:13px 12px;border-top:1px solid var(--line);cursor:pointer}
+.row:first-child{border-top:0}
+.row .name{flex:1}
+.row .cnt{color:var(--muted);font-size:13px}
+.row .chev{color:var(--faint)}
+.empty{color:var(--muted);text-align:center;padding:28px 12px;font-size:14px}
+.link-btn{color:var(--accent);font-size:14px;padding:10px 2px}
+.toolbar{display:flex;gap:16px;justify-content:flex-end}
+
+/* Erfassen */
+.capture{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--bg);border-top:1px solid var(--line);
+  padding:10px 0 calc(10px + env(safe-area-inset-bottom))}
+.cap-row{display:flex;gap:8px;align-items:flex-end}
+.cap-row textarea{flex:1;resize:none;min-height:44px;max-height:140px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);outline:none;line-height:1.35}
+.cap-row textarea:focus{border-color:var(--accent)}
+.round{flex:none;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+.round svg{width:20px;height:20px}
+.round.primary{background:var(--text);color:var(--bg);border-color:var(--text)}
+.round.rec{background:var(--danger);border-color:var(--danger);color:#fff}
+.round:disabled{opacity:.4}
+.reply{margin-bottom:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px;max-height:45vh;overflow:auto}
+.reply .acts{color:var(--muted);font-size:12.5px;margin-top:6px}
+.reply .x{float:right;color:var(--faint);margin-left:8px}
+.draft{margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:10px}
+.draft .lbl{font-size:12px;color:var(--muted)}
+.draft input,.draft textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--bg);margin:3px 0 7px}
+.draft textarea{min-height:140px;resize:vertical}
+.draft .btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-size:14px}
+.btn.primary{background:var(--text);color:var(--bg);border-color:var(--text)}
+.btn.danger{color:var(--danger)}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes s{to{transform:rotate(360deg)}}
+
+/* Blatt (Bearbeiten) */
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+@media (min-width:700px){.sheet-bg{align-items:center}}
+.sheet{background:var(--bg);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:14px 14px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+@media (min-width:700px){.sheet{border-radius:14px}}
+.sheet h2{font-size:16px;margin:0 0 12px}
+.f{margin-bottom:11px}
+.f label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.f input,.f select,.f textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface);outline:none}
+.f textarea{min-height:90px;resize:vertical}
+.f input:focus,.f select:focus,.f textarea:focus{border-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sheet .btns{display:flex;gap:8px;justify-content:space-between;margin-top:14px}
+
+/* Agenten */
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:10px 0 4px}
+.chips::-webkit-scrollbar{display:none}
+.chips button{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:14px;white-space:nowrap;color:var(--muted)}
+.chips button.on{border-color:var(--text);color:var(--text);font-weight:600}
+.agent-intro{color:var(--muted);font-size:13.5px;margin:6px 0 10px}
+.quick{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 12px}
+.quick button{padding:7px 12px;border-radius:9px;background:var(--accent-soft);color:var(--accent);font-size:13.5px}
+.chat{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.msg{max-width:88%;padding:9px 12px;border-radius:12px;font-size:14.5px;line-height:1.45;word-wrap:break-word}
+.msg.user{align-self:flex-end;background:var(--text);color:var(--bg);border-bottom-right-radius:4px}
+.msg.assistant{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:4px}
+.msg .acts{color:var(--muted);font-size:12px;margin-top:6px;border-top:1px solid var(--line);padding-top:5px}
+.msg .say{float:right;margin-left:8px;color:var(--faint);font-size:12px}
+.msg time{display:block;font-size:11px;color:var(--faint);margin-top:4px}
+.agent-tools{display:flex;gap:16px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+.agent-tools .on{color:var(--text);font-weight:600}
+details.depot{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin:4px 0 10px}
+details.depot summary{padding:10px 12px;cursor:pointer;font-size:14px;display:flex;justify-content:space-between;list-style:none}
+details.depot summary::-webkit-details-marker{display:none}
+details.depot .pos{display:flex;justify-content:space-between;gap:10px;padding:8px 12px;border-top:1px solid var(--line);font-size:13.5px}
+details.depot .pos small{color:var(--muted);display:block}
+.today-cta{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:var(--radius);font-size:14px;color:var(--muted)}
+
+/* Login */
+.center{min-height:80vh;display:grid;place-items:center}
+.card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px}
+.card h1{font-size:20px;margin:0 0 4px}
+.card p{color:var(--muted);font-size:14px;margin:0 0 16px}
+.err{color:var(--danger);font-size:13px;margin-top:8px}
+.toast{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top));transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 14px;border-radius:9px;font-size:14px;z-index:60}
+</style>
+</head>
+<body>
+
+<!-- Einrichtung (nur falls config.js leer ist) -->
+<div id="setup" class="wrap center hidden">
+  <div class="card">
+    <h1>Zentrale einrichten</h1>
+    <p>Supabase-Zugangsdaten eintragen (Supabase → Project Settings → API).</p>
+    <div class="f"><label>Project URL</label><input id="su-url" placeholder="https://xxxx.supabase.co"></div>
+    <div class="f"><label>anon public key</label><input id="su-key" placeholder="eyJ..."></div>
+    <button class="btn primary" id="su-save" style="width:100%">Speichern</button>
+  </div>
+</div>
+
+<!-- Anmeldung -->
+<div id="login" class="wrap center hidden">
+  <div class="card">
+    <h1>Zentrale</h1>
+    <p>Anmelden</p>
+    <form id="login-form">
+      <div class="f"><label>E-Mail</label><input id="li-mail" type="email" autocomplete="username" required></div>
+      <div class="f"><label>Passwort</label><input id="li-pw" type="password" autocomplete="current-password" required></div>
+      <button class="btn primary" style="width:100%">Anmelden</button>
+      <div class="err" id="li-err"></div>
+    </form>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app" class="hidden">
+  <header>
+    <div class="wrap">
+      <div class="bar">
+        <button class="back hidden" id="back">‹ Zurück</button>
+        <h1 id="title">Heute</h1>
+        <button class="icon-btn" id="add" title="Aufgabe anlegen" aria-label="Aufgabe anlegen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="icon-btn" id="menu" title="Einstellungen" aria-label="Einstellungen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+      <nav class="tabs" id="tabs"></nav>
+    </div>
+  </header>
+  <main class="wrap" id="main"></main>
+
+  <div class="capture">
+    <div class="wrap">
+      <div id="reply" class="reply hidden"></div>
+      <div class="cap-row">
+        <textarea id="cap" rows="1" placeholder="Zuruf an die Zentrale …" enterkeyhint="send"></textarea>
+        <button class="round hidden" id="mic" title="Diktieren" aria-label="Diktieren">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+        <button class="round primary" id="send" title="Senden" aria-label="Senden">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="sheet-root"></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+"use strict";
+// ============================================================
+// Grundlagen
+// ============================================================
+const VERSION = "3";
+const STATUS = {
+  offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
+};
+const PRIO = { 1: "Hoch", 2: "Normal", 3: "Niedrig" };
+const DEFAULT_AREAS = ["SHK-Betrieb", "Finanzen (Gruppe)", "Immobilien", "Contracting", "VölzControl", "Privates"];
+const AGENTS = {
+  assistenz: { name: "Clara", label: "Assistenz", title: "Persönliche Assistenz", intro: "Tag besprechen, erinnern, Prioritäten setzen. Was du erzählst, wird direkt als Aufgabe festgehalten.",
+    quick: [["Morgenbriefing", "Morgenbriefing bitte: Was ist heute wichtig, in welcher Reihenfolge gehe ich es an?"], ["Tagesabschluss", "Tagesabschluss: Was ist erledigt, was bleibt offen, was schiebe ich auf morgen?"], ["Was vergesse ich?", "Woran denke ich gerade nicht, was aber wichtig ist? Wer wartet auf mich?"]] },
+  zukunft: { name: "Zukunfts-Ich", label: "Journal", title: "Journal", intro: "Dein Journal – im Gespräch mit dir selbst, zehn Jahre weiter. Erzähl, was war und was dich beschäftigt.",
+    quick: [["Tagesjournal", "Tagesjournal: Lass uns auf den heutigen Tag schauen."], ["Wochenrückblick", "Wochenrückblick: Was siehst du in meinen Einträgen dieser Woche?"], ["Entscheidung", "Ich stehe vor einer Entscheidung:"]] },
+  investor: { name: "Viktor", label: "Investor", title: "Investor", intro: "Private Investments und Vermögen. Nenn Positionen und Werte, er pflegt die Übersicht und zeigt dir die nächsten Schritte.",
+    quick: [["Überblick und nächste Schritte", "Gib mir einen Überblick über meine Investments und die nächsten sinnvollen Schritte."], ["Neue Position", "Ich möchte eine neue Position eintragen:"], ["Strategie klären", "Lass uns meine Anlagestrategie klären: Frag mich, was du dafür wissen musst."]] },
+  cfo: { name: "Richard", label: "CFO", title: "CFO", intro: "Strategische Finanzbegleitung aller Unternehmen der Gruppe: Liquidität, Ertrag, Finanzierung, Struktur.",
+    quick: [["Lagebesprechung", "Lass uns eine Lagebesprechung zur Gruppe machen. Was sind aus CFO-Sicht gerade die wichtigsten Themen, und welche Zahlen brauchst du von mir?"], ["Liquidität", "Hilf mir, eine einfache Liquiditätsplanung für die nächsten 3 Monate aufzusetzen."], ["Investition prüfen", "Ich überlege eine Investition und will sie mit dir durchrechnen:"]] },
+  hr: { name: "Paula", label: "HR", title: "HR", intro: "Personal im Betrieb: Gewinnung, Ausbildung, Rollen, Gespräche, Arbeitsrecht-Grundlagen.",
+    quick: [["Stellenanzeige", "Schreib mir eine Stellenanzeige für:"], ["Gespräch vorbereiten", "Bereite mit mir ein Mitarbeitergespräch vor:"], ["Team-Struktur", "Lass uns über die Rollen und Verantwortlichkeiten im Team sprechen."]] },
+  marketing: { name: "Mia", label: "Marketing", title: "Marketing", intro: "Sichtbarkeit für Betrieb und VölzControl: Ideen, Texte, Kampagnen – mit wenig Aufwand.",
+    quick: [["Ideen für diesen Monat", "Gib mir drei Marketing-Maßnahmen für diesen Monat mit wenig Aufwand und guter Wirkung."], ["Social-Media-Post", "Schreib mir einen Social-Media-Post zu:"], ["Bewertungen", "Wie bekomme ich systematisch mehr Google-Bewertungen?"]] },
+  vertrieb: { name: "Jonas", label: "Vertrieb", title: "Vertrieb", intro: "Angebote nachfassen, Kundengespräche, Einwände, Abschlussquote. Plaud-Anbindung folgt.",
+    quick: [["Nachfassen", "Welche Angebote oder Kunden sollte ich diese Woche nachfassen?"], ["Kundengespräch festhalten", "Ich hatte gerade ein Kundengespräch:"], ["Einwand Preis", "Kunde sagt, wir sind zu teuer. Wie reagiere ich?"]] },
+};
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ls = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+
+// Datum
+const iso = (d) => d.toLocaleDateString("sv-SE");
+const today = () => iso(new Date());
+const addDays = (s, n) => { const d = new Date(s + "T12:00:00"); d.setDate(d.getDate() + n); return iso(d); };
+function fmtDue(s) {
+  if (!s) return "";
+  const t = today();
+  if (s === t) return "heute";
+  if (s === addDays(t, 1)) return "morgen";
+  if (s === addDays(t, -1)) return "gestern";
+  const d = new Date(s + "T12:00:00");
+  return d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+}
+function dayHeading(s) {
+  const t = today();
+  if (s === t) return "Heute";
+  if (s === addDays(t, 1)) return "Morgen";
+  return new Date(s + "T12:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+}
+
+// ============================================================
+// Verbindung
+// ============================================================
+const CFG = window.ZENTRALE_CONFIG || {};
+const SB_URL = CFG.supabaseUrl || ls.get("sb_url", "");
+const SB_KEY = CFG.supabaseAnonKey || ls.get("sb_key", "");
+let sb = null;
+
+const S = {
+  areas: [], projects: [], tasks: [],
+  view: ls.get("view", "heute"),
+  stack: [],           // Navigation innerhalb Bereiche: [{type:'area',id},{type:'project',id}]
+  history: [],         // Gesprächsverlauf mit der KI (nur diese Sitzung)
+  showDone: false,
+  agent: ls.get("agent", "assistenz"),
+  msgs: {},            // Verlauf je Agent (aus der Datenbank)
+  notes: {},
+  investments: [],
+  pending: null,       // gerade gesendete Nachricht
+  names: {},           // eigene Agenten-Namen (Einstellungen)
+};
+
+function show(id) { ["setup", "login", "app"].forEach((x) => $("#" + x).classList.toggle("hidden", x !== id)); }
+
+async function boot() {
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if (!SB_URL || !SB_KEY) {
+    show("setup");
+    $("#su-save").onclick = () => {
+      ls.set("sb_url", $("#su-url").value.trim()); ls.set("sb_key", $("#su-key").value.trim()); location.reload();
+    };
+    return;
+  }
+  sb = supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return showLogin();
+  start();
+}
+
+function showLogin() {
+  show("login");
+  $("#login-form").onsubmit = async (e) => {
+    e.preventDefault(); $("#li-err").textContent = "";
+    const { error } = await sb.auth.signInWithPassword({ email: $("#li-mail").value.trim(), password: $("#li-pw").value });
+    if (error) $("#li-err").textContent = "Anmeldung fehlgeschlagen: " + error.message; else start();
+  };
+}
+
+// ============================================================
+// Daten
+// ============================================================
+async function loadAll() {
+  const since = new Date(Date.now() - 30 * 864e5).toISOString();
+  const [a, p, t] = await Promise.all([
+    sb.from("areas").select("*").order("sort").order("created_at"),
+    sb.from("projects").select("*").order("sort").order("created_at"),
+    sb.from("tasks").select("*").or(`status.neq.erledigt,done_at.gte.${since}`).order("created_at", { ascending: false }),
+  ]);
+  if (a.error || p.error || t.error) { toast("Laden fehlgeschlagen"); return; }
+  S.areas = a.data; S.projects = p.data; S.tasks = t.data;
+}
+
+async function seedIfEmpty() {
+  if (S.areas.length) return;
+  const { data: { user } } = await sb.auth.getUser();
+  await sb.from("areas").insert(DEFAULT_AREAS.map((name, i) => ({ name, sort: i, user_id: user.id })));
+  await loadAll();
+}
+
+let reloadTimer = null;
+function scheduleReload() {
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(async () => { await loadAll(); render(); }, 250);
+}
+
+async function start() {
+  show("app");
+  await loadAll();
+  await seedIfEmpty();
+  await loadSettings();
+  if (S.view === "agenten") await loadAgent(S.agent);
+  render();
+  sb.channel("sync")
+    .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, scheduleReload)
+    .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, scheduleReload)
+    .on("postgres_changes", { event: "*", schema: "public", table: "areas" }, scheduleReload)
+    .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => { if (S.view === "agenten" && !busy) loadAgent(S.agent).then(render); })
+    .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, () => loadSettings().then(render))
+    .on("postgres_changes", { event: "*", schema: "public", table: "investments" }, () => { if (S.view === "agenten") loadAgent(S.agent).then(render); })
+    .subscribe();
+  // Beim Zurückkehren in die App frisch laden (iOS pausiert Hintergrund-Verbindungen)
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) scheduleReload(); });
+  setupCapture();
+}
+
+const areaOf = (id) => S.areas.find((a) => a.id === id);
+const projOf = (id) => S.projects.find((p) => p.id === id);
+const open = () => S.tasks.filter((t) => t.status !== "erledigt");
+function sortTasks(list) {
+  return list.slice().sort((a, b) =>
+    (a.due_date || "9999").localeCompare(b.due_date || "9999") || a.priority - b.priority || b.created_at.localeCompare(a.created_at));
+}
+
+async function saveTask(id, patch) {
+  const t = S.tasks.find((x) => x.id === id);
+  if (t) { Object.assign(t, patch); render(); }
+  const { error } = await sb.from("tasks").update(patch).eq("id", id);
+  if (error) { toast("Speichern fehlgeschlagen"); scheduleReload(); }
+}
+async function insertTask(row) {
+  const { data: { user } } = await sb.auth.getUser();
+  const { data, error } = await sb.from("tasks").insert({ ...row, user_id: user.id }).select().single();
+  if (error) { toast("Anlegen fehlgeschlagen: " + error.message); return null; }
+  S.tasks.unshift(data); render(); return data;
+}
+
+// ============================================================
+// Darstellung
+// ============================================================
+const VIEWS = [
+  ["heute", "Heute"], ["woche", "Woche"], ["eingang", "Eingang"], ["warten", "Warten"], ["bereiche", "Bereiche"], ["agenten", "Agenten"],
+];
+
+function counts() {
+  const t = today(), o = open();
+  return {
+    heute: o.filter((x) => x.due_date && x.due_date <= t).length,
+    woche: o.filter((x) => x.due_date && x.due_date > t && x.due_date <= addDays(t, 7)).length,
+    eingang: o.filter((x) => !x.area_id && !x.project_id).length,
+    warten: o.filter((x) => x.status === "ich_warte" || x.status === "wartet_auf_mich").length,
+    bereiche: 0,
+    agenten: 0,
+  };
+}
+
+function render() {
+  const c = counts();
+  $("#tabs").innerHTML = VIEWS.map(([k, l]) =>
+    `<button data-view="${k}" class="${S.view === k ? "on" : ""}">${l}${c[k] ? `<span class="n">${c[k]}</span>` : ""}</button>`).join("");
+  $("#tabs").querySelectorAll("button").forEach((b) => b.onclick = () => {
+    S.view = b.dataset.view; S.stack = []; S.showDone = false; ls.set("view", S.view);
+    if (S.view === "agenten") { render(); loadAgent(S.agent).then(() => { render(); scrollChat(); }); }
+    else { render(); window.scrollTo(0, 0); }
+  });
+  $("#cap").placeholder = S.view === "agenten" ? (S.agent === "zukunft" ? "Journal-Eintrag …" : `Nachricht an ${agentName(S.agent)} …`) : "Zuruf an die Zentrale …";
+  const inStack = S.view === "bereiche" && S.stack.length;
+  $("#back").classList.toggle("hidden", !inStack);
+  $("#back").onclick = () => { S.stack.pop(); S.showDone = false; render(); };
+  const m = $("#main");
+  ({ heute: viewToday, woche: viewWeek, eingang: viewInbox, warten: viewWaiting, bereiche: viewAreas, erledigt: viewDone, agenten: viewAgents }[S.view] || viewToday)(m);
+  bindTaskRows(m);
+}
+
+function taskRow(t, opts = {}) {
+  const t0 = today();
+  const meta = [];
+  if (!opts.hideWhere) {
+    const a = areaOf(t.area_id), p = projOf(t.project_id);
+    meta.push(esc(p ? `${a ? a.name + " › " : ""}${p.name}` : a ? a.name : "Eingang"));
+  }
+  if (t.due_date && t.status !== "erledigt") {
+    const cls = t.due_date < t0 ? "over" : t.due_date === t0 ? "today" : "";
+    meta.push(`<span class="due ${cls}">${esc(fmtDue(t.due_date))}</span>`);
+  }
+  if (t.status !== "offen" && t.status !== "erledigt") meta.push(`<span class="st">${STATUS[t.status]}${t.person ? ": " + esc(t.person) : ""}</span>`);
+  else if (t.person) meta.push(esc(t.person));
+  if (t.notes) meta.push("Notiz");
+  return `<div class="task ${t.status === "erledigt" ? "done" : ""} ${t.priority === 1 ? "p1" : ""}" data-id="${t.id}">
+    <button class="check" data-act="toggle" aria-label="Erledigt umschalten"></button>
+    <div class="tbody" data-act="open"><div class="t">${esc(t.title)}</div>${meta.length ? `<div class="m">${meta.join("<span>·</span>")}</div>` : ""}</div>
+  </div>`;
+}
+function list(tasks, opts) {
+  return tasks.length ? `<div class="list">${tasks.map((t) => taskRow(t, opts)).join("")}</div>` : "";
+}
+function section(title, tasks, opts = {}, cls = "") {
+  if (!tasks.length) return "";
+  return `<div class="section ${cls}"><span>${esc(title)}</span><span>${tasks.length}</span></div>${list(tasks, opts)}`;
+}
+function bindTaskRows(root) {
+  root.querySelectorAll(".task").forEach((el) => {
+    const id = el.dataset.id;
+    el.querySelector('[data-act="toggle"]').onclick = () => {
+      const t = S.tasks.find((x) => x.id === id);
+      saveTask(id, { status: t.status === "erledigt" ? "offen" : "erledigt", done_at: t.status === "erledigt" ? null : new Date().toISOString() });
+    };
+    el.querySelector('[data-act="open"]').onclick = () => openSheet(S.tasks.find((x) => x.id === id));
+  });
+}
+
+function setTitle(s) { $("#title").textContent = s; }
+
+function viewToday(m) {
+  setTitle("Heute");
+  const t = today(), o = sortTasks(open());
+  const over = o.filter((x) => x.due_date && x.due_date < t);
+  const now = o.filter((x) => x.due_date === t);
+  const active = o.filter((x) => x.status === "in_arbeit" && (!x.due_date || x.due_date > t));
+  const doneToday = S.tasks.filter((x) => x.status === "erledigt" && x.done_at && iso(new Date(x.done_at)) === t);
+  let h = section("Überfällig", over, {}, "over") + section("Heute", now) + section("In Arbeit", active) + section("Heute erledigt", doneToday);
+  if (!over.length && !now.length && !active.length) h = `<div class="empty">Für heute ist nichts fällig.</div>` + h;
+  h += `<div class="today-cta"><span>Tag mit der Assistenz besprechen</span><button class="link-btn" id="to-brief" style="padding:0">Morgenbriefing</button></div>`;
+  m.innerHTML = h;
+  $("#to-brief").onclick = () => startAgent("assistenz", AGENTS.assistenz.quick[0][1]);
+}
+
+function viewWeek(m) {
+  setTitle("Diese Woche");
+  const t = today(), end = addDays(t, 7), o = sortTasks(open());
+  const over = o.filter((x) => x.due_date && x.due_date < t);
+  let h = section("Überfällig", over, {}, "over");
+  for (let i = 0; i <= 7; i++) {
+    const d = addDays(t, i);
+    h += section(dayHeading(d), o.filter((x) => x.due_date === d));
+  }
+  const later = o.filter((x) => x.due_date && x.due_date > end);
+  h += section("Später", later);
+  m.innerHTML = h || `<div class="empty">Keine Termine in den nächsten Tagen.</div>`;
+}
+
+function viewInbox(m) {
+  setTitle("Eingang");
+  const inbox = sortTasks(open().filter((x) => !x.area_id && !x.project_id));
+  m.innerHTML = inbox.length
+    ? `<div class="section"><span>Noch nicht einsortiert</span><span>${inbox.length}</span></div>${list(inbox, { hideWhere: true })}
+       <div class="toolbar"><button class="link-btn" id="sort-ai">Von der KI einsortieren lassen</button></div>`
+    : `<div class="empty">Der Eingang ist leer.</div>`;
+  const b = $("#sort-ai");
+  if (b) b.onclick = () => askAgent("Sortiere alle Aufgaben im Eingang in passende Lebensbereiche und Projekte ein, wo die Zuordnung eindeutig ist. Unklare bleiben im Eingang.");
+}
+
+function viewWaiting(m) {
+  setTitle("Warten");
+  const o = sortTasks(open());
+  const mine = o.filter((x) => x.status === "wartet_auf_mich");
+  const theirs = o.filter((x) => x.status === "ich_warte");
+  const h = section("Jemand wartet auf mich", mine) + section("Ich warte auf jemanden", theirs);
+  m.innerHTML = h || `<div class="empty">Niemand wartet, und du wartest auf niemanden.</div>`;
+}
+
+function viewDone(m) {
+  setTitle("Erledigt");
+  const d = S.tasks.filter((x) => x.status === "erledigt").sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
+  m.innerHTML = section("Letzte 30 Tage", d) || `<div class="empty">Noch nichts erledigt.</div>`;
+}
+
+function viewAreas(m) {
+  const top = S.stack[S.stack.length - 1];
+  if (!top) {
+    setTitle("Bereiche");
+    const o = open();
+    m.innerHTML = `<div class="section"><span>Lebensbereiche</span></div><div class="list">${S.areas.map((a) => {
+      const n = o.filter((t) => t.area_id === a.id).length;
+      return `<div class="row" data-area="${a.id}"><span class="name">${esc(a.name)}</span><span class="cnt">${n || ""}</span><span class="chev">›</span></div>`;
+    }).join("")}</div>
+    <div class="toolbar"><button class="link-btn" id="new-area">Bereich anlegen</button><button class="link-btn" id="to-done">Erledigte ansehen</button></div>`;
+    m.querySelectorAll("[data-area]").forEach((r) => r.onclick = () => { S.stack.push({ type: "area", id: r.dataset.area }); render(); window.scrollTo(0, 0); });
+    $("#new-area").onclick = async () => {
+      const name = prompt("Name des Lebensbereichs"); if (!name) return;
+      const { data: { user } } = await sb.auth.getUser();
+      await sb.from("areas").insert({ name: name.trim(), sort: S.areas.length, user_id: user.id }); scheduleReload();
+    };
+    $("#to-done").onclick = () => { S.view = "erledigt"; render(); };
+    return;
+  }
+  if (top.type === "area") {
+    const a = areaOf(top.id); if (!a) { S.stack = []; return render(); }
+    setTitle(a.name);
+    const o = open();
+    const projs = S.projects.filter((p) => p.area_id === a.id && !p.archived);
+    const loose = sortTasks(o.filter((t) => t.area_id === a.id && !t.project_id));
+    let h = `<div class="section"><span>Projekte</span></div>`;
+    h += projs.length ? `<div class="list">${projs.map((p) => {
+      const n = o.filter((t) => t.project_id === p.id).length;
+      return `<div class="row" data-proj="${p.id}"><span class="name">${esc(p.name)}</span><span class="cnt">${n || ""}</span><span class="chev">›</span></div>`;
+    }).join("")}</div>` : `<div class="empty">Noch keine Projekte.</div>`;
+    h += `<div class="toolbar"><button class="link-btn" id="new-proj">Projekt anlegen</button><button class="link-btn" id="ren-area">Umbenennen</button></div>`;
+    h += section("Aufgaben ohne Projekt", loose, { hideWhere: true });
+    m.innerHTML = h;
+    m.querySelectorAll("[data-proj]").forEach((r) => r.onclick = () => { S.stack.push({ type: "project", id: r.dataset.proj }); render(); window.scrollTo(0, 0); });
+    $("#new-proj").onclick = async () => {
+      const name = prompt("Name des Projekts"); if (!name) return;
+      const { data: { user } } = await sb.auth.getUser();
+      await sb.from("projects").insert({ area_id: a.id, name: name.trim(), sort: projs.length, user_id: user.id }); scheduleReload();
+    };
+    $("#ren-area").onclick = async () => {
+      const name = prompt("Neuer Name", a.name); if (!name) return;
+      await sb.from("areas").update({ name: name.trim() }).eq("id", a.id); scheduleReload();
+    };
+    return;
+  }
+  // Projekt
+  const p = projOf(top.id); if (!p) { S.stack.pop(); return render(); }
+  setTitle(p.name);
+  const tasks = sortTasks(S.tasks.filter((t) => t.project_id === p.id && t.status !== "erledigt"));
+  const done = S.tasks.filter((t) => t.project_id === p.id && t.status === "erledigt");
+  m.innerHTML = (section("Offen", tasks, { hideWhere: true }) || `<div class="empty">Keine offenen Aufgaben.</div>`)
+    + (S.showDone ? section("Erledigt", done, { hideWhere: true }) : "")
+    + `<div class="toolbar">${done.length ? `<button class="link-btn" id="tgl-done">${S.showDone ? "Erledigte ausblenden" : "Erledigte zeigen (" + done.length + ")"}</button>` : ""}
+       <button class="link-btn" id="ren-proj">Umbenennen</button><button class="link-btn" id="arc-proj">Archivieren</button></div>`;
+  const td = $("#tgl-done"); if (td) td.onclick = () => { S.showDone = !S.showDone; render(); };
+  $("#ren-proj").onclick = async () => {
+    const name = prompt("Neuer Name", p.name); if (!name) return;
+    await sb.from("projects").update({ name: name.trim() }).eq("id", p.id); scheduleReload();
+  };
+  $("#arc-proj").onclick = async () => {
+    if (!confirm(`Projekt „${p.name}“ archivieren? Aufgaben bleiben erhalten.`)) return;
+    await sb.from("projects").update({ archived: true }).eq("id", p.id); S.stack.pop(); scheduleReload();
+  };
+}
+
+// ============================================================
+// Agenten
+// ============================================================
+async function loadAgent(agent) {
+  const [m, n, inv] = await Promise.all([
+    sb.from("messages").select("id,role,content,actions,created_at").eq("agent", agent).order("created_at", { ascending: false }).limit(60),
+    sb.from("agent_notes").select("id,agent,content,created_at").in("agent", [agent, "gemeinsam"]).order("created_at"),
+    agent === "investor" ? sb.from("investments").select("*").order("kind").order("name") : Promise.resolve({ data: null }),
+  ]);
+  if (!m.error) S.msgs[agent] = (m.data || []).reverse();
+  if (!n.error) S.notes[agent] = n.data || [];
+  if (inv.data) S.investments = inv.data;
+}
+const agentName = (k) => S.names[k] || AGENTS[k].name;
+async function loadSettings() {
+  const { data } = await sb.from("settings").select("key,value");
+  const n = (data || []).find((x) => x.key === "agent_names");
+  S.names = (n && n.value) || {};
+}
+async function saveNames() {
+  const { data: { user } } = await sb.auth.getUser();
+  await sb.from("settings").upsert({ user_id: user.id, key: "agent_names", value: S.names, updated_at: new Date().toISOString() });
+}
+function scrollChat() { requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight)); }
+
+function startAgent(agent, text) {
+  S.view = "agenten"; S.agent = agent; ls.set("view", "agenten"); ls.set("agent", agent);
+  render();
+  loadAgent(agent).then(() => { render(); scrollChat(); if (text) askAgent(text); });
+}
+
+function fmtText(t) {
+  // schlichtes Format: Absätze, Aufzählungen, **fett** entfernen
+  return esc(String(t || "").replace(/\*\*(.+?)\*\*/g, "$1").replace(/^#+\s*/gm, "")).replace(/\n/g, "<br>");
+}
+const eur = (v) => v == null ? "–" : Number(v).toLocaleString("de-DE", { maximumFractionDigits: 0 }) + " €";
+
+function viewAgents(m) {
+  const a = AGENTS[S.agent] ? S.agent : "assistenz";
+  const def = AGENTS[a];
+  setTitle(a === "zukunft" ? "Journal" : `${agentName(a)} · ${def.label}`);
+  const msgs = S.msgs[a] || [];
+  let h = `<div class="chips">${Object.entries(AGENTS).map(([k, d]) => `<button data-agent="${k}" class="${k === a ? "on" : ""}" title="${esc(d.label)}">${esc(k === "zukunft" ? "Journal" : agentName(k))}</button>`).join("")}</div>`;
+  if (a !== "zukunft") h += `<div class="agent-intro" style="margin-bottom:0"><strong style="color:var(--text)">${esc(def.label)}</strong></div>`;
+  h += `<div class="agent-intro">${esc(def.intro)}</div>`;
+
+  if (a === "investor") {
+    const inv = S.investments || [];
+    const total = inv.reduce((s, i) => s + (Number(i.value_eur) || 0), 0);
+    h += `<details class="depot"><summary><span>Vermögensübersicht · ${inv.length} Positionen</span><span>${eur(total)}</span></summary>
+      ${inv.length ? inv.map((i) => `<div class="pos"><span>${esc(i.name)}<small>${esc(i.kind)}${i.holder ? " · " + esc(i.holder) : ""}${i.quantity != null ? " · " + i.quantity + " Stk" : ""}</small></span>
+        <span style="text-align:right">${eur(i.value_eur)}<small>Stand ${new Date(i.updated_at).toLocaleDateString("de-DE")}</small></span></div>`).join("")
+        : `<div class="pos"><span style="color:var(--muted)">Noch leer. Erzähl dem Investor einfach, was du hast.</span></div>`}
+    </details>`;
+  }
+
+  h += `<div class="quick">${def.quick.map(([l], i) => `<button data-q="${i}">${esc(l)}</button>`).join("")}</div>`;
+  h += `<div class="chat">`;
+  if (!msgs.length && !S.pending) h += `<div class="empty">Noch kein Gespräch. Tippe oder sprich unten los.</div>`;
+  let lastDay = "";
+  h += msgs.map((x, i) => {
+    const day = new Date(x.created_at).toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+    const sep = day !== lastDay ? `<div class="section" style="justify-content:center;margin:8px 0 0">${esc(day)}</div>` : "";
+    lastDay = day;
+    return sep + `<div class="msg ${x.role}">
+      ${x.role === "assistant" ? `<button class="say" data-say="${i}" aria-label="Vorlesen">Vorlesen</button>` : ""}
+      ${fmtText(x.content)}
+      ${x.actions?.length ? `<div class="acts">${x.actions.map(esc).join("<br>")}</div>` : ""}
+      <time>${new Date(x.created_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</time>
+    </div>`;
+  }).join("");
+  if (S.pending && S.pending.agent === a) {
+    h += `<div class="msg user">${fmtText(S.pending.text)}</div><div class="msg assistant"><span class="spin"></span>denkt nach …</div>`;
+  }
+  h += `</div>`;
+  const tts = ls.get("tts", false);
+  h += `<div class="agent-tools">
+    <button class="link-btn ${tts ? "on" : ""}" id="tts">${tts ? "Vorlesen: an" : "Vorlesen: aus"}</button>
+    <button class="link-btn" id="notes">Gemerktes (${(S.notes[a] || []).length})</button>
+    ${a === "zukunft" ? "" : `<button class="link-btn" id="rename">Umbenennen</button>`}
+    ${msgs.length ? `<button class="link-btn" id="clear">Verlauf leeren</button>` : ""}
+  </div>`;
+  m.innerHTML = h;
+
+  m.querySelectorAll("[data-agent]").forEach((b) => b.onclick = () => {
+    S.agent = b.dataset.agent; ls.set("agent", S.agent); stopSpeaking();
+    render(); loadAgent(S.agent).then(() => { render(); scrollChat(); });
+  });
+  m.querySelectorAll("[data-q]").forEach((b) => b.onclick = () => {
+    const text = def.quick[+b.dataset.q][1];
+    if (text.endsWith(":")) { const cap = $("#cap"); cap.value = text + " "; cap.focus(); cap.dispatchEvent(new Event("input")); }
+    else { unlockSpeech(); askAgent(text); }
+  });
+  m.querySelectorAll("[data-say]").forEach((b) => b.onclick = () => speak(msgs[+b.dataset.say].content, true));
+  $("#tts").onclick = () => { const on = !ls.get("tts", false); ls.set("tts", on); if (on) unlockSpeech(); else stopSpeaking(); render(); };
+  $("#notes").onclick = () => openNotes(a);
+  if ($("#rename")) $("#rename").onclick = async () => {
+    const n = prompt(`Name für ${def.label}`, agentName(a));
+    if (n === null) return;
+    if (n.trim()) S.names[a] = n.trim(); else delete S.names[a];
+    render(); await saveNames();
+  };
+  const c = $("#clear");
+  if (c) c.onclick = async () => {
+    if (!confirm((a === "zukunft" ? "Gesamtes Journal löschen? Das lässt sich nicht rückgängig machen." : `Gesprächsverlauf mit ${agentName(a)} löschen? Gemerktes bleibt erhalten.`))) return;
+    await sb.from("messages").delete().eq("agent", a); S.msgs[a] = []; render();
+  };
+}
+
+function openNotes(a) {
+  const notes = S.notes[a] || [];
+  const root = $("#sheet-root");
+  root.innerHTML = `<div class="sheet-bg"><div class="sheet">
+    <h2>Gemerktes – ${esc(a === "zukunft" ? "Zukunfts-Ich" : agentName(a))}</h2>
+    <p style="color:var(--muted);font-size:13.5px;margin:0 0 10px">Das weiß der Agent dauerhaft über dich. „Für alle“ sehen alle Agenten.</p>
+    ${notes.length ? `<div class="list">${notes.map((n) => `<div class="row" style="cursor:default"><span class="name">${esc(n.content)}${n.agent === "gemeinsam" ? ` <span style="color:var(--muted);font-size:12px">· für alle</span>` : ""}</span>
+      <button class="link-btn" data-del="${n.id}" style="color:var(--danger);padding:0">Löschen</button></div>`).join("")}</div>`
+      : `<div class="empty">Noch nichts gemerkt.</div>`}
+    <div class="f" style="margin-top:12px"><label>Selbst hinzufügen</label><textarea id="n-new" placeholder="z. B. Ziel: bis 2030 drei weitere Mietobjekte"></textarea></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:6px"><input type="checkbox" id="n-shared"> für alle Agenten</label>
+    <div class="btns"><span></span><span style="display:flex;gap:8px"><button class="btn" id="n-close">Schließen</button><button class="btn primary" id="n-save">Hinzufügen</button></span></div>
+  </div></div>`;
+  const close = () => (root.innerHTML = "");
+  root.querySelector(".sheet-bg").onclick = (e) => { if (e.target.classList.contains("sheet-bg")) close(); };
+  $("#n-close").onclick = close;
+  root.querySelectorAll("[data-del]").forEach((b) => b.onclick = async () => {
+    await sb.from("agent_notes").delete().eq("id", b.dataset.del); await loadAgent(a); openNotes(a); render();
+  });
+  $("#n-save").onclick = async () => {
+    const content = $("#n-new").value.trim(); if (!content) return;
+    const { data: { user } } = await sb.auth.getUser();
+    await sb.from("agent_notes").insert({ agent: $("#n-shared").checked ? "gemeinsam" : a, content, user_id: user.id });
+    await loadAgent(a); openNotes(a); render();
+  };
+}
+
+// ---- Sprachausgabe (kostenlos, läuft auf dem Gerät) ----
+let voice = null;
+function pickVoice() {
+  if (!window.speechSynthesis) return null;
+  const vs = speechSynthesis.getVoices().filter((v) => /^de(-|_|$)/i.test(v.lang));
+  const rank = (v) => (/premium|enhanced|natural|neural/i.test(v.name) ? 0 : /google|anna|helena|petra|markus|yannick|katja/i.test(v.name) ? 1 : 2) + (v.localService ? 0 : 0.5);
+  return vs.sort((x, y) => rank(x) - rank(y))[0] || null;
+}
+if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { voice = pickVoice(); };
+function unlockSpeech() {
+  // iOS gibt Sprachausgabe erst nach einer Nutzeraktion frei
+  if (!window.speechSynthesis || unlockSpeech.done) return;
+  try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); unlockSpeech.done = true; } catch {}
+}
+function stopSpeaking() { try { window.speechSynthesis && speechSynthesis.cancel(); } catch {} }
+function speak(text, force) {
+  if (!window.speechSynthesis || (!force && !ls.get("tts", false))) return;
+  stopSpeaking();
+  const clean = String(text || "").replace(/\*\*/g, "").replace(/^[-•]\s*/gm, "").replace(/€/g, " Euro").replace(/\s+/g, " ").trim();
+  // in Sätze teilen – lange Texte brechen auf manchen Geräten sonst ab
+  const parts = clean.match(/[^.!?]+[.!?]*/g) || [clean];
+  voice = voice || pickVoice();
+  for (const p of parts) {
+    const u = new SpeechSynthesisUtterance(p.trim()); u.lang = "de-DE"; if (voice) u.voice = voice; u.rate = 1.05;
+    speechSynthesis.speak(u);
+  }
+}
+
+// ============================================================
+// Aufgabe bearbeiten / anlegen
+// ============================================================
+function openSheet(t) {
+  const isNew = !t;
+  const top = S.stack[S.stack.length - 1];
+  t = t || {
+    title: "", notes: "", status: "offen", priority: 2, person: "", due_date: S.view === "heute" ? today() : null,
+    area_id: S.view === "bereiche" && top ? (top.type === "area" ? top.id : projOf(top.id)?.area_id) : null,
+    project_id: S.view === "bereiche" && top && top.type === "project" ? top.id : null,
+  };
+  const areaOpts = `<option value="">Eingang (unsortiert)</option>` + S.areas.map((a) => `<option value="${a.id}" ${a.id === t.area_id ? "selected" : ""}>${esc(a.name)}</option>`).join("");
+  const projOpts = (areaId) => `<option value="">— kein Projekt —</option>` + S.projects.filter((p) => p.area_id === areaId && (!p.archived || p.id === t.project_id))
+    .map((p) => `<option value="${p.id}" ${p.id === t.project_id ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+  const root = $("#sheet-root");
+  root.innerHTML = `<div class="sheet-bg"><div class="sheet" role="dialog">
+    <h2>${isNew ? "Neue Aufgabe" : "Aufgabe"}</h2>
+    <div class="f"><label>Titel</label><input id="e-title" value="${esc(t.title)}"></div>
+    <div class="f"><label>Notiz</label><textarea id="e-notes">${esc(t.notes)}</textarea></div>
+    <div class="grid2">
+      <div class="f"><label>Bereich</label><select id="e-area">${areaOpts}</select></div>
+      <div class="f"><label>Projekt</label><select id="e-proj">${projOpts(t.area_id)}</select></div>
+      <div class="f"><label>Fällig</label><input id="e-due" type="date" value="${t.due_date || ""}"></div>
+      <div class="f"><label>Priorität</label><select id="e-prio">${[1, 2, 3].map((p) => `<option value="${p}" ${p === t.priority ? "selected" : ""}>${PRIO[p]}</option>`).join("")}</select></div>
+      <div class="f"><label>Status</label><select id="e-status">${Object.entries(STATUS).map(([k, l]) => `<option value="${k}" ${k === t.status ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="f"><label>Person</label><input id="e-person" value="${esc(t.person)}" placeholder="wer wartet / auf wen"></div>
+    </div>
+    <div class="btns">
+      ${isNew ? "<span></span>" : `<button class="btn danger" id="e-del">Löschen</button>`}
+      <span style="display:flex;gap:8px"><button class="btn" id="e-cancel">Abbrechen</button><button class="btn primary" id="e-save">Speichern</button></span>
+    </div></div></div>`;
+  const close = () => (root.innerHTML = "");
+  root.querySelector(".sheet-bg").onclick = (e) => { if (e.target.classList.contains("sheet-bg")) close(); };
+  $("#e-cancel").onclick = close;
+  $("#e-area").onchange = () => { $("#e-proj").innerHTML = projOpts($("#e-area").value || null); };
+  if (isNew) setTimeout(() => $("#e-title")?.focus(), 50);
+  $("#e-save").onclick = async () => {
+    const row = {
+      title: $("#e-title").value.trim(), notes: $("#e-notes").value.trim() || null,
+      area_id: $("#e-area").value || null, project_id: $("#e-proj").value || null,
+      due_date: $("#e-due").value || null, priority: +$("#e-prio").value, status: $("#e-status").value,
+      person: $("#e-person").value.trim() || null,
+    };
+    if (!row.title) return $("#e-title").focus();
+    close();
+    if (isNew) await insertTask(row); else await saveTask(t.id, row);
+    scheduleReload();
+  };
+  const del = $("#e-del");
+  if (del) del.onclick = async () => {
+    if (!confirm("Aufgabe endgültig löschen?")) return;
+    close(); S.tasks = S.tasks.filter((x) => x.id !== t.id); render();
+    await sb.from("tasks").delete().eq("id", t.id);
+  };
+}
+
+function openMenu() {
+  const root = $("#sheet-root");
+  root.innerHTML = `<div class="sheet-bg"><div class="sheet">
+    <h2>Einstellungen</h2>
+    <p style="color:var(--muted);font-size:14px;margin:0 0 14px">Zentrale · Version ${VERSION}</p>
+    <div class="btns" style="justify-content:flex-start;flex-wrap:wrap">
+      <button class="btn" id="m-reload">Neu laden</button>
+      <button class="btn" id="m-done">Erledigte ansehen</button>
+      <button class="btn danger" id="m-out">Abmelden</button>
+      <button class="btn" id="m-close">Schließen</button>
+    </div></div></div>`;
+  const close = () => (root.innerHTML = "");
+  root.querySelector(".sheet-bg").onclick = (e) => { if (e.target.classList.contains("sheet-bg")) close(); };
+  $("#m-close").onclick = close;
+  $("#m-reload").onclick = () => location.reload();
+  $("#m-done").onclick = () => { close(); S.view = "erledigt"; S.stack = []; render(); };
+  $("#m-out").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+}
+
+// ============================================================
+// Zuruf an die KI (Tippen oder Diktieren)
+// ============================================================
+let busy = false;
+function setupCapture() {
+  const cap = $("#cap");
+  const grow = () => { cap.style.height = "auto"; cap.style.height = Math.min(cap.scrollHeight, 140) + "px"; };
+  cap.addEventListener("input", grow);
+  cap.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
+  });
+  $("#send").onclick = submit;
+  $("#add").onclick = () => openSheet(null);
+  $("#menu").onclick = openMenu;
+  setupMic(cap, grow);
+}
+
+function submit() {
+  const cap = $("#cap"); const text = cap.value.trim();
+  if (!text || busy) return;
+  if (ls.get("tts", false)) unlockSpeech();
+  cap.value = ""; cap.style.height = "auto";
+  askAgent(text);
+}
+
+async function askAgent(text) {
+  if (S.view === "agenten") return askPersona(text);
+  busy = true; $("#send").disabled = true;
+  const r = $("#reply");
+  r.classList.remove("hidden");
+  r.innerHTML = `<span class="spin"></span>${esc(text)}`;
+  try {
+    const { data, error } = await sb.functions.invoke("agent", { body: { message: text, history: S.history } });
+    if (error || data?.error) throw new Error(data?.error || (await errText(error)));
+    S.history.push({ role: "user", content: text }, { role: "assistant", content: data.reply || "" });
+    S.history = S.history.slice(-10);
+    showReply(data);
+    scheduleReload();
+  } catch (e) {
+    // Nichts geht verloren: Zuruf landet unverändert im Eingang
+    await insertTask({ title: text.slice(0, 200), notes: text.length > 200 ? text : null });
+    r.innerHTML = `<button class="x" aria-label="Schließen">✕</button>Die KI war nicht erreichbar. Dein Zuruf liegt im Eingang.
+      <div class="acts">${esc(e.message || e)}</div>`;
+    r.querySelector(".x").onclick = () => r.classList.add("hidden");
+  } finally {
+    busy = false; $("#send").disabled = false;
+  }
+}
+async function askPersona(text) {
+  const agent = S.agent;
+  busy = true; $("#send").disabled = true; stopSpeaking();
+  S.pending = { agent, text }; render(); scrollChat();
+  try {
+    const { data, error } = await sb.functions.invoke("agent", { body: { agent, message: text } });
+    if (error || data?.error) throw new Error(data?.error || (await errText(error)));
+    S.pending = null;
+    await loadAgent(agent);
+    if (S.view === "agenten" && S.agent === agent) { render(); scrollChat(); }
+    if (data.drafts?.length) showReply({ reply: "Mail-Entwurf zur Freigabe:", actions: [], drafts: data.drafts });
+    speak(data.reply);
+    scheduleReload();
+  } catch (e) {
+    S.pending = null;
+    await loadAgent(agent); render();
+    const cap = $("#cap"); if (!cap.value) { cap.value = text; cap.dispatchEvent(new Event("input")); }
+    toast("Keine Antwort: " + String(e.message || e).slice(0, 80));
+  } finally {
+    busy = false; $("#send").disabled = false;
+  }
+}
+async function errText(error) {
+  try { const b = await error.context?.json?.(); if (b?.error) return b.error; } catch {}
+  return error?.message || "Unbekannter Fehler";
+}
+
+function showReply(data) {
+  const r = $("#reply");
+  const drafts = (data.drafts || []).map((d, i) => `
+    <div class="draft" data-i="${i}">
+      <div class="lbl">${d.kind === "kunde" ? "Kundenmail – bitte prüfen" : "Interne Mail"}</div>
+      <div class="lbl">An</div><input class="d-to" value="${esc(d.to)}" type="email">
+      <div class="lbl">Betreff</div><input class="d-sub" value="${esc(d.subject)}">
+      <div class="lbl">Text</div><textarea class="d-body">${esc(d.body)}</textarea>
+      <div class="btns"><button class="btn primary d-send">In Mail-App öffnen</button><button class="btn d-copy">Text kopieren</button><button class="btn d-drop">Verwerfen</button></div>
+    </div>`).join("");
+  r.innerHTML = `<button class="x" aria-label="Schließen">✕</button>${esc(data.reply || "Erledigt.")}
+    ${data.actions?.length ? `<div class="acts">${data.actions.map(esc).join("<br>")}</div>` : ""}${drafts}`;
+  r.querySelector(".x").onclick = () => r.classList.add("hidden");
+  r.querySelectorAll(".draft").forEach((el) => {
+    const get = () => ({ to: el.querySelector(".d-to").value.trim(), sub: el.querySelector(".d-sub").value, body: el.querySelector(".d-body").value });
+    el.querySelector(".d-send").onclick = () => {
+      const d = get();
+      location.href = `mailto:${encodeURIComponent(d.to)}?subject=${encodeURIComponent(d.sub)}&body=${encodeURIComponent(d.body)}`;
+    };
+    el.querySelector(".d-copy").onclick = async () => {
+      const d = get(); try { await navigator.clipboard.writeText(d.body); toast("Kopiert"); } catch { toast("Kopieren nicht möglich"); }
+    };
+    el.querySelector(".d-drop").onclick = () => el.remove();
+  });
+  if (!data.drafts?.length && !data.reply?.includes("?")) {
+    clearTimeout(showReply.t);
+    showReply.t = setTimeout(() => { if (!r.querySelector(".draft")) r.classList.add("hidden"); }, 9000);
+  }
+}
+
+function setupMic(cap, grow) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return; // Fallback: Diktier-Taste der Tastatur
+  const mic = $("#mic"); mic.classList.remove("hidden");
+  let rec = null, base = "";
+  mic.onclick = () => {
+    if (rec) { rec.stop(); return; }
+    rec = new SR(); rec.lang = "de-DE"; rec.interimResults = true; rec.continuous = true;
+    base = cap.value ? cap.value.trim() + " " : "";
+    rec.onresult = (e) => {
+      let txt = "";
+      for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+      cap.value = base + txt; grow();
+    };
+    rec.onerror = (e) => { if (e.error !== "aborted" && e.error !== "no-speech") toast("Diktat: " + e.error); };
+    rec.onend = () => { rec = null; mic.classList.remove("rec"); cap.focus(); };
+    try { rec.start(); mic.classList.add("rec"); } catch { rec = null; }
+  };
+}
+
+boot();
+</script>
+</body>
+</html>
