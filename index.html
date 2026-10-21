@@ -138,6 +138,12 @@ details.depot .pos{display:flex;justify-content:space-between;gap:10px;padding:8
 details.depot .pos small{color:var(--muted);display:block}
 .today-cta{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:var(--radius);font-size:14px;color:var(--muted)}
 
+.voicebar{display:flex;gap:8px;margin:8px 0 4px;flex-wrap:wrap}
+.voicebar button{padding:7px 12px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-size:13.5px;color:var(--muted)}
+.voicebar button.on{border-color:var(--text);color:var(--text);font-weight:600}
+.voicebar .hint{font-size:12.5px;color:var(--muted);align-self:center}
+.round.listen{background:var(--accent);border-color:var(--accent);color:#fff}
+
 /* Login */
 .center{min-height:80vh;display:grid;place-items:center}
 .card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px}
@@ -218,7 +224,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "3";
+const VERSION = "4";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -638,6 +644,13 @@ function viewAgents(m) {
     </details>`;
   }
 
+  const tts = ls.get("tts", true);
+  const hf = ls.get("handsfree", false);
+  h += `<div class="voicebar">
+    <button id="tts" class="${tts ? "on" : ""}">${tts ? "Sprechen: an" : "Sprechen: aus"}</button>
+    ${hasSR() ? `<button id="hf" class="${hf ? "on" : ""}">${hf ? "Freihändig: an" : "Freihändig: aus"}</button>` : ""}
+    ${hf ? `<span class="hint">Antwort wird vorgelesen, danach hört die App zu und sendet automatisch.</span>` : ""}
+  </div>`;
   h += `<div class="quick">${def.quick.map(([l], i) => `<button data-q="${i}">${esc(l)}</button>`).join("")}</div>`;
   h += `<div class="chat">`;
   if (!msgs.length && !S.pending) h += `<div class="empty">Noch kein Gespräch. Tippe oder sprich unten los.</div>`;
@@ -657,9 +670,7 @@ function viewAgents(m) {
     h += `<div class="msg user">${fmtText(S.pending.text)}</div><div class="msg assistant"><span class="spin"></span>denkt nach …</div>`;
   }
   h += `</div>`;
-  const tts = ls.get("tts", false);
   h += `<div class="agent-tools">
-    <button class="link-btn ${tts ? "on" : ""}" id="tts">${tts ? "Vorlesen: an" : "Vorlesen: aus"}</button>
     <button class="link-btn" id="notes">Gemerktes (${(S.notes[a] || []).length})</button>
     ${a === "zukunft" ? "" : `<button class="link-btn" id="rename">Umbenennen</button>`}
     ${msgs.length ? `<button class="link-btn" id="clear">Verlauf leeren</button>` : ""}
@@ -676,7 +687,14 @@ function viewAgents(m) {
     else { unlockSpeech(); askAgent(text); }
   });
   m.querySelectorAll("[data-say]").forEach((b) => b.onclick = () => speak(msgs[+b.dataset.say].content, true));
-  $("#tts").onclick = () => { const on = !ls.get("tts", false); ls.set("tts", on); if (on) unlockSpeech(); else stopSpeaking(); render(); };
+  $("#tts").onclick = () => { const on = !ls.get("tts", true); ls.set("tts", on); if (on) unlockSpeech(); else { stopSpeaking(); ls.set("handsfree", false); } render(); };
+  const hfb = $("#hf");
+  if (hfb) hfb.onclick = () => {
+    const on = !ls.get("handsfree", false); ls.set("handsfree", on);
+    if (on) { ls.set("tts", true); unlockSpeech(); toast("Freihändig: Tippe einmal aufs Mikrofon, dann läuft das Gespräch."); }
+    else { stopListening(); }
+    render();
+  };
   $("#notes").onclick = () => openNotes(a);
   if ($("#rename")) $("#rename").onclick = async () => {
     const n = prompt(`Name für ${def.label}`, agentName(a));
@@ -733,17 +751,18 @@ function unlockSpeech() {
   try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); unlockSpeech.done = true; } catch {}
 }
 function stopSpeaking() { try { window.speechSynthesis && speechSynthesis.cancel(); } catch {} }
-function speak(text, force) {
-  if (!window.speechSynthesis || (!force && !ls.get("tts", false))) return;
+function speak(text, force, onDone) {
+  if (!window.speechSynthesis || (!force && !ls.get("tts", true))) { onDone && onDone(); return; }
   stopSpeaking();
   const clean = String(text || "").replace(/\*\*/g, "").replace(/^[-•]\s*/gm, "").replace(/€/g, " Euro").replace(/\s+/g, " ").trim();
   // in Sätze teilen – lange Texte brechen auf manchen Geräten sonst ab
   const parts = clean.match(/[^.!?]+[.!?]*/g) || [clean];
   voice = voice || pickVoice();
-  for (const p of parts) {
+  parts.forEach((p, i) => {
     const u = new SpeechSynthesisUtterance(p.trim()); u.lang = "de-DE"; if (voice) u.voice = voice; u.rate = 1.05;
+    if (i === parts.length - 1 && onDone) { u.onend = () => onDone(); u.onerror = () => onDone(); }
     speechSynthesis.speak(u);
-  }
+  });
 }
 
 // ============================================================
@@ -835,13 +854,13 @@ function setupCapture() {
   $("#send").onclick = submit;
   $("#add").onclick = () => openSheet(null);
   $("#menu").onclick = openMenu;
-  setupMic(cap, grow);
+  setupMic();
 }
 
 function submit() {
   const cap = $("#cap"); const text = cap.value.trim();
   if (!text || busy) return;
-  if (ls.get("tts", false)) unlockSpeech();
+  if (ls.get("tts", true)) unlockSpeech();
   cap.value = ""; cap.style.height = "auto";
   askAgent(text);
 }
@@ -871,7 +890,7 @@ async function askAgent(text) {
 }
 async function askPersona(text) {
   const agent = S.agent;
-  busy = true; $("#send").disabled = true; stopSpeaking();
+  busy = true; $("#send").disabled = true; stopSpeaking(); stopListening();
   S.pending = { agent, text }; render(); scrollChat();
   try {
     const { data, error } = await sb.functions.invoke("agent", { body: { agent, message: text } });
@@ -880,7 +899,9 @@ async function askPersona(text) {
     await loadAgent(agent);
     if (S.view === "agenten" && S.agent === agent) { render(); scrollChat(); }
     if (data.drafts?.length) showReply({ reply: "Mail-Entwurf zur Freigabe:", actions: [], drafts: data.drafts });
-    speak(data.reply);
+    speak(data.reply, false, () => {
+      if (ls.get("handsfree", false) && S.view === "agenten" && !document.hidden) setTimeout(() => startListening(true), 350);
+    });
     scheduleReload();
   } catch (e) {
     S.pending = null;
@@ -926,23 +947,48 @@ function showReply(data) {
   }
 }
 
-function setupMic(cap, grow) {
+const hasSR = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+let rec = null;
+function stopListening() { if (rec) { try { rec.abort(); } catch {} rec = null; } const m = $("#mic"); if (m) m.classList.remove("rec", "listen"); }
+
+// auto = true: Gesprächsmodus – nach einer Sprechpause wird automatisch gesendet
+function startListening(auto) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return; // Fallback: Diktier-Taste der Tastatur
+  if (!SR || rec || busy) return;
+  const cap = $("#cap"), mic = $("#mic");
+  const grow = () => { cap.style.height = "auto"; cap.style.height = Math.min(cap.scrollHeight, 140) + "px"; };
+  stopSpeaking();
+  const r = new SR(); r.lang = "de-DE"; r.interimResults = true; r.continuous = !auto;
+  const base = cap.value ? cap.value.trim() + " " : "";
+  let heard = "", silence = null;
+  r.onresult = (e) => {
+    let txt = "";
+    for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+    heard = txt; cap.value = base + txt; grow();
+    if (auto) { clearTimeout(silence); silence = setTimeout(() => { try { r.stop(); } catch {} }, 1800); }
+  };
+  r.onerror = (e) => {
+    if (e.error === "not-allowed") toast("Mikrofon nicht erlaubt – in den Einstellungen freigeben.");
+    else if (e.error !== "aborted" && e.error !== "no-speech") toast("Diktat: " + e.error);
+  };
+  r.onend = () => {
+    clearTimeout(silence);
+    if (rec === r) rec = null;
+    mic.classList.remove("rec", "listen");
+    if (auto && heard.trim() && ls.get("handsfree", false)) submit();
+    else if (!auto) cap.focus();
+  };
+  try { r.start(); rec = r; mic.classList.add(auto ? "listen" : "rec"); }
+  catch { rec = null; if (auto) toast("Zum Weitersprechen aufs Mikrofon tippen."); }
+}
+
+function setupMic() {
+  if (!hasSR()) return; // Fallback: Diktier-Taste der Tastatur
   const mic = $("#mic"); mic.classList.remove("hidden");
-  let rec = null, base = "";
   mic.onclick = () => {
-    if (rec) { rec.stop(); return; }
-    rec = new SR(); rec.lang = "de-DE"; rec.interimResults = true; rec.continuous = true;
-    base = cap.value ? cap.value.trim() + " " : "";
-    rec.onresult = (e) => {
-      let txt = "";
-      for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
-      cap.value = base + txt; grow();
-    };
-    rec.onerror = (e) => { if (e.error !== "aborted" && e.error !== "no-speech") toast("Diktat: " + e.error); };
-    rec.onend = () => { rec = null; mic.classList.remove("rec"); cap.focus(); };
-    try { rec.start(); mic.classList.add("rec"); } catch { rec = null; }
+    if (rec) { try { rec.stop(); } catch {} return; }
+    unlockSpeech();
+    startListening(S.view === "agenten" && ls.get("handsfree", false));
   };
 }
 
