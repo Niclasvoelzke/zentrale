@@ -136,6 +136,16 @@ details.depot summary{padding:10px 12px;cursor:pointer;font-size:14px;display:fl
 details.depot summary::-webkit-details-marker{display:none}
 details.depot .pos{display:flex;justify-content:space-between;gap:10px;padding:8px 12px;border-top:1px solid var(--line);font-size:13.5px}
 details.depot .pos small{color:var(--muted);display:block}
+.log{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.log .e{padding:10px 12px;border-top:1px solid var(--line)}
+.log .e:first-child{border-top:0}
+.log .h{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.log .h b{font-weight:600}
+.log .h span{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.log .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.log .k.mangel{color:var(--danger)} .log .k.nachtrag{color:var(--accent)}
+.log .c{font-size:13.5px;color:var(--muted);margin-top:4px;white-space:pre-wrap}
+.log .c.cut{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
 .today-cta{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:var(--radius);font-size:14px;color:var(--muted)}
 
 .voicebar{display:flex;gap:8px;margin:8px 0 4px;flex-wrap:wrap}
@@ -224,7 +234,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "4";
+const VERSION = "5";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -337,6 +347,9 @@ async function loadAll() {
   ]);
   if (a.error || p.error || t.error) { toast("Laden fehlgeschlagen"); return; }
   S.areas = a.data; S.projects = p.data; S.tasks = t.data;
+  // Bautagebuch (optional – fehlt die Tabelle noch, bleibt es einfach leer)
+  const lg = await sb.from("site_log").select("*").order("entry_date", { ascending: false }).order("created_at", { ascending: false }).limit(500);
+  S.log = lg.error ? [] : lg.data;
 }
 
 async function seedIfEmpty() {
@@ -363,6 +376,7 @@ async function start() {
     .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "areas" }, scheduleReload)
+    .on("postgres_changes", { event: "*", schema: "public", table: "site_log" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => { if (S.view === "agenten" && !busy) loadAgent(S.agent).then(render); })
     .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, () => loadSettings().then(render))
     .on("postgres_changes", { event: "*", schema: "public", table: "investments" }, () => { if (S.view === "agenten") loadAgent(S.agent).then(render); })
@@ -573,11 +587,20 @@ function viewAreas(m) {
   setTitle(p.name);
   const tasks = sortTasks(S.tasks.filter((t) => t.project_id === p.id && t.status !== "erledigt"));
   const done = S.tasks.filter((t) => t.project_id === p.id && t.status === "erledigt");
+  const log = (S.log || []).filter((x) => x.project_id === p.id);
+  const KIND = { bautagebuch: "Bautagebuch", mangel: "Mangel", nachtrag: "Nachtrag", notiz: "Notiz" };
+  const logHtml = log.length ? `<div class="section"><span>Bautagebuch</span><span>${log.length}</span></div><div class="log">${log.slice(0, S.showLog ? 200 : 5).map((x) =>
+      `<div class="e"><div class="k ${x.kind}">${KIND[x.kind] || x.kind}</div><div class="h"><b>${esc(x.title)}</b><span>${new Date(x.entry_date + "T12:00:00").toLocaleDateString("de-DE")}</span></div>
+       ${x.content ? `<div class="c cut">${esc(x.content)}</div>` : ""}</div>`).join("")}</div>
+     ${log.length > 5 ? `<div class="toolbar"><button class="link-btn" id="tgl-log">${S.showLog ? "Weniger zeigen" : "Alle " + log.length + " Einträge"}</button></div>` : ""}` : "";
   m.innerHTML = (section("Offen", tasks, { hideWhere: true }) || `<div class="empty">Keine offenen Aufgaben.</div>`)
     + (S.showDone ? section("Erledigt", done, { hideWhere: true }) : "")
+    + logHtml
     + `<div class="toolbar">${done.length ? `<button class="link-btn" id="tgl-done">${S.showDone ? "Erledigte ausblenden" : "Erledigte zeigen (" + done.length + ")"}</button>` : ""}
        <button class="link-btn" id="ren-proj">Umbenennen</button><button class="link-btn" id="arc-proj">Archivieren</button></div>`;
   const td = $("#tgl-done"); if (td) td.onclick = () => { S.showDone = !S.showDone; render(); };
+  const tl = $("#tgl-log"); if (tl) tl.onclick = () => { S.showLog = !S.showLog; render(); };
+  m.querySelectorAll(".log .c").forEach((c) => c.onclick = () => c.classList.toggle("cut"));
   $("#ren-proj").onclick = async () => {
     const name = prompt("Neuer Name", p.name); if (!name) return;
     await sb.from("projects").update({ name: name.trim() }).eq("id", p.id); scheduleReload();
