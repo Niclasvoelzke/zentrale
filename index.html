@@ -279,7 +279,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "13";
+const VERSION = "14";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -774,7 +774,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 function startAgent(agent, text) {
-  keepAwake(true);
+  keepAwake(true); probeTTS();
   S.view = "agenten"; S.agent = agent; S.agentOpen = true; ls.set("view", "agenten"); ls.set("agent", agent); ls.set("agentOpen", true);
   render();
   loadAgent(agent).then(() => { render(); scrollChat(); if (text) askAgent(text); });
@@ -814,6 +814,7 @@ function viewAgents(m) {
   const def = AGENTS[a];
   setTitle(a === "zukunft" ? "Journal" : `${agentName(a)} · ${def.label}`);
   const msgs = S.msgs[a] || [];
+  if (cloudTTS === null) probeTTS();
   let h = msgs.length ? "" : `<div class="agent-intro" style="margin-top:12px">${esc(def.intro)}</div>`;
 
   if (a === "investor") {
@@ -827,9 +828,8 @@ function viewAgents(m) {
   }
 
   h += `<div class="pillrow">
-    ${hasSR() ? `<button id="talk" class="pill on" style="background:var(--accent);border-color:var(--accent);color:#fff">Mit ${esc(a === "zukunft" ? "deinem Zukunfts-Ich" : agentName(a))} sprechen</button>` : ""}
     <button id="notes" class="pill">Gemerktes ${(S.notes[a] || []).length}</button>
-    <button id="vpick" class="pill">Stimme${S.voices[a] ? ": " + esc(S.voices[a].name) : ""}</button>
+    ${cloudTTS ? `<button id="vpick" class="pill">Stimme${S.voices[a] ? ": " + esc(S.voices[a].name) : ""}</button>` : ""}
     <button id="tpl" class="pill ${S.templates[a] ? "on" : ""}">${S.templates[a] ? "Vorlage aktiv" : "Vorlage"}</button>
   </div>`;
   const quick = S.templates[a] ? [["Nach Vorlage", a === "zukunft" ? "Lass uns meinen Journal-Eintrag nach meiner Vorlage durchgehen." : "Lass uns nach meiner Vorlage vorgehen."], ...def.quick] : def.quick;
@@ -864,9 +864,8 @@ function viewAgents(m) {
     else { unlockSpeech(); askAgent(text); }
   });
   m.querySelectorAll("[data-say]").forEach((b) => b.onclick = () => { unlockSpeech(); speak(msgs[+b.dataset.say].content, true, null, a); });
-  const tk = $("#talk"); if (tk) tk.onclick = () => openVoice(a);
   $("#tpl").onclick = () => openTemplate(a);
-  $("#vpick").onclick = () => openVoicePicker(a);
+  if ($("#vpick")) $("#vpick").onclick = () => openVoicePicker(a);
   $("#notes").onclick = () => openNotes(a);
   if ($("#rename")) $("#rename").onclick = async () => {
     const n = prompt(`Name für ${def.label}`, agentName(a));
@@ -992,10 +991,11 @@ function openVoice(agent) {
   V = { agent: a, state: "", misses: 0 };
   $("#v-end").onclick = closeVoice;
   $("#v-orb").onclick = () => {
-    if (!V) return;
-    if (V.state === "speaking") { V.state = ""; stopSpeaking(); vListen(); }
-    else if (V.state === "listening") { if (vrec) try { vrec.stop(); } catch {} }
-    else if (V.state === "paused") { V.misses = 0; vListen(); }
+    if (!V || V.state === "thinking") return;
+    const said = $("#v-sub")?.classList.contains("me") ? $("#v-sub").textContent.trim() : "";
+    if (V.state === "listening" && vrec && said) { vStopRec(); vSend(said); return; }   // sofort senden
+    // in jedem anderen Fall: alles anhalten und frisch zuhören
+    stopSpeaking(); vStopRec(); V.state = ""; V.misses = 0; vListen();
   };
   $("#v-mute").onclick = () => {
     if (!V) return;
@@ -1005,7 +1005,7 @@ function openVoice(agent) {
   vListen();
 }
 function closeVoice() {
-  V = null; vStopRec(); stopSpeaking();
+  V = null; vStopRec(); stopSpeaking(); clearTimeout(vListen.retry);
   const el = $("#voice"); if (el) el.remove();
   render(); scrollChat();
 }
@@ -1019,53 +1019,82 @@ function vSet(state, label, sub, me) {
   if (sub !== undefined) { sb2.textContent = sub; sb2.classList.toggle("me", !!me); }
   const mute = $("#v-mute"); if (mute) mute.innerHTML = state === "paused" ? ICON_MICOFF : ICON_MIC;
 }
-function vStopRec() { if (vrec) { const r = vrec; vrec = null; try { r.abort(); } catch {} } }
-function vListen() {
-  if (!V || vrec || V.state === "thinking") return;
+function vStopRec() {
+  vGen++;                       // laufende Erkennung ungültig machen – egal ob iOS noch ein Ende meldet
+  clearTimeout(vListen.retry);
+  if (vrec) { const r = vrec; vrec = null; try { r.abort(); } catch {} }
+}
+// Zuhören. iOS verschluckt gelegentlich Ereignisse (kein onend, start() blockiert) –
+// deshalb läuft jede Runde mit eigener Kennung und Wachhund, nie wird auf ein Ereignis "für immer" gewartet.
+let vGen = 0;
+function vListen(attempt = 0) {
+  if (!V || V.state === "thinking" || V.state === "speaking") return;
+  if (vrec) vStopRec();
+  const gen = ++vGen;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const r = new SR(); r.lang = "de-DE"; r.interimResults = true; r.continuous = true;
-  let heard = "", silence = null;
+  let heard = "", silence = null, dog = null, over = false;
+  const finish = () => {
+    if (over) return; over = true;
+    clearTimeout(silence); clearTimeout(dog);
+    if (vrec === r) vrec = null;
+    try { r.abort(); } catch {}
+    if (gen !== vGen || !V) return;            // inzwischen neu gestartet oder beendet
+    if (heard) { V.misses = 0; vSend(heard); return; }
+    V.misses++;
+    if (V.misses >= 3) vSet("paused", "Tippe auf den Kreis, um zu sprechen.", "");
+    else vListen.retry = setTimeout(() => vListen(), 400);
+  };
+  // stoppen und höchstens 900 ms auf das Ende warten
+  const wrapUp = () => { try { r.stop(); } catch {} clearTimeout(dog); dog = setTimeout(finish, 900); };
   r.onresult = (e) => {
-    if (vrec !== r) return;
+    if (gen !== vGen || over) return;
     let txt = "";
     for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
     heard = txt.trim();
     vSet("listening", "Hört zu …", heard, true);
-    clearTimeout(silence);
-    silence = setTimeout(() => { try { r.stop(); } catch {} }, 1500);
+    clearTimeout(silence); clearTimeout(dog);
+    silence = setTimeout(wrapUp, 1500);        // 1,5 s Pause = fertig gesprochen
+    dog = setTimeout(wrapUp, 45000);           // Sicherheitsgrenze für sehr lange Beiträge
   };
   r.onerror = (e) => {
-    if (e.error === "not-allowed" || e.error === "service-not-allowed") { vrec = null; vSet("paused", "Mikrofon nicht freigegeben – in den iPhone-Einstellungen für Safari erlauben."); }
+    if (gen !== vGen) return;
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      over = true; vrec = null; clearTimeout(silence); clearTimeout(dog);
+      vSet("paused", "Mikrofon nicht freigegeben – in den iPhone-Einstellungen erlauben.", "");
+    }
   };
-  r.onend = () => {
-    clearTimeout(silence);
-    if (vrec !== r) return;          // bewusst abgebrochen
-    vrec = null;
-    if (!V) return;
-    if (heard) { V.misses = 0; vSend(heard); return; }
-    V.misses++;
-    if (V.misses >= 3) vSet("paused", "Tippe auf den Kreis, um zu sprechen.");
-    else setTimeout(vListen, 250);
-  };
-  try { r.start(); vrec = r; vSet("listening", "Hört zu …", V.misses ? undefined : "", true); awakeKick(); }
-  catch { vSet("paused", "Tippe auf den Kreis, um zu sprechen."); }
+  r.onend = () => { if (gen === vGen) finish(); };
+  try {
+    r.start(); vrec = r;
+    vSet("listening", "Hört zu …", V.misses ? undefined : "", true);
+    dog = setTimeout(wrapUp, 10000);           // 10 s nichts gehört -> Runde beenden, neu ansetzen
+    awakeKick();
+  } catch {
+    // Mikrofon noch vom letzten Durchgang belegt -> kurz warten und erneut versuchen
+    if (attempt < 6) { vSet("listening", "Einen Moment …", undefined); vListen.retry = setTimeout(() => { if (gen === vGen) { vGen++; vListen(attempt + 1); } }, 500); }
+    else vSet("paused", "Tippe auf den Kreis, um zu sprechen.", "");
+  }
 }
 async function vSend(text) {
   if (!V) return;
-  const agent = V.agent;
+  const agent = V.agent, session = V;
   vSet("thinking", "Denkt nach …", text, true);
   try {
-    const { data, error } = await sb.functions.invoke("agent", { body: { agent, message: text, voice: true } });
+    const call = sb.functions.invoke("agent", { body: { agent, message: text, voice: true } });
+    const limit = new Promise((_, no) => setTimeout(() => no(new Error("Zeitüberschreitung")), 90000));
+    const { data, error } = await Promise.race([call, limit]);
     if (error || data?.error) throw new Error(data?.error || (await errText(error)));
     loadAgent(agent).then(() => { if (inChat()) { render(); scrollChat(); } });
     if (data.drafts?.length) showReply({ reply: "Mail-Entwurf zur Freigabe:", actions: [], drafts: data.drafts });
     scheduleReload();
-    if (!V) return;
+    if (V !== session) return;
     const reply = data.reply || "Erledigt.";
     vSet("speaking", "Spricht – tippe, um zu unterbrechen", reply);
-    speak(reply, true, () => { if (V && V.state === "speaking") { V.state = ""; setTimeout(vListen, 300); } }, agent);
+    speak(reply, true, () => { if (V === session && V.state === "speaking") { V.state = ""; vListen.retry = setTimeout(() => vListen(), 450); } }, agent);
   } catch (e) {
-    vSet("paused", "Keine Antwort – tippe, um es nochmal zu versuchen.", String(e.message || e).slice(0, 120));
+    if (V !== session) return;
+    vSet("paused", "Keine Antwort – tippe auf den Kreis, um es nochmal zu versuchen.", String(e.message || e).slice(0, 120));
   }
 }
 
@@ -1079,7 +1108,15 @@ function pickVoice() {
 }
 if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { voice = pickVoice(); };
 // ---- Sprachausgabe: menschliche Stimme (ElevenLabs/OpenAI über Funktion "tts"), sonst Gerätestimme ----
-let player = null, cloudTTS = null, speakToken = 0, ttsHint = false;
+let player = null, cloudTTS = null, speakToken = 0;
+// einmal nachsehen, ob eine menschliche Stimme eingerichtet ist – sonst wird die Stimmenwahl ausgeblendet
+async function probeTTS() {
+  if (cloudTTS !== null || probeTTS.busy) return;
+  probeTTS.busy = true;
+  try { const r = await ttsFetch({ list_voices: true }); cloudTTS = r.status === 501 ? false : r.ok ? true : null; } catch {}
+  probeTTS.busy = false;
+  if (cloudTTS !== null && inChat() && !V) render();
+}
 function silentWav() {
   const n = 800, b = new ArrayBuffer(44 + n * 2), v = new DataView(b);
   const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
@@ -1098,13 +1135,14 @@ function unlockSpeech() {
 }
 function stopSpeaking() {
   speakToken++;
+  clearInterval(speak.poll);
   try { if (player) player.pause(); } catch {}
   try { window.speechSynthesis && speechSynthesis.cancel(); } catch {}
 }
-async function ttsFetch(body) {
+async function ttsFetch(body, signal) {
   const { data: { session } } = await sb.auth.getSession();
   return fetch(`${SB_URL}/functions/v1/tts`, {
-    method: "POST",
+    method: "POST", signal,
     headers: { Authorization: `Bearer ${session?.access_token || ""}`, apikey: SB_KEY, "content-type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -1112,12 +1150,18 @@ async function ttsFetch(body) {
 async function speak(text, force, onDone, agent, voiceId) {
   stopSpeaking();
   const my = speakToken;
-  const done = () => { if (my === speakToken && onDone) onDone(); };
+  let fired = false, dog = null;
+  // done() wird genau einmal ausgelöst – durch das Ende-Ereignis ODER den Wachhund
+  const done = () => { if (fired || my !== speakToken) return; fired = true; clearTimeout(dog); clearInterval(speak.poll); if (onDone) onDone(); };
   const clean = String(text || "").replace(/\*\*/g, "").replace(/^[-•]\s*/gm, "").replace(/\s+/g, " ").trim();
   if (!clean) return done();
+  const guard = (ms) => { clearTimeout(dog); dog = setTimeout(done, ms); };
+  const estimate = 2500 + clean.length * 85;  // grob: 12 Zeichen pro Sekunde + Puffer
   if (cloudTTS !== false) {
     try {
-      const r = await ttsFetch({ text: clean, agent: agent || S.agent, voice: voiceId || undefined });
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
+      const r = await ttsFetch({ text: clean, agent: agent || S.agent, voice: voiceId || undefined }, ctl.signal);
+      clearTimeout(t);
       if (my !== speakToken) return;
       if (r.status === 501) { cloudTTS = false; }
       else if (!r.ok) { throw new Error((await r.text()).slice(0, 150)); }
@@ -1128,7 +1172,9 @@ async function speak(text, force, onDone, agent, voiceId) {
         const p = getPlayer(), url = URL.createObjectURL(blob);
         p.onended = () => { URL.revokeObjectURL(url); done(); };
         p.onerror = () => done();
+        p.onloadedmetadata = () => { if (isFinite(p.duration)) guard(p.duration * 1000 + 2500); };
         p.src = url;
+        guard(estimate + 4000);
         await p.play();
         awakeKick();
         return;
@@ -1136,11 +1182,19 @@ async function speak(text, force, onDone, agent, voiceId) {
     } catch (e) {
       if (my !== speakToken) return;
       console.warn("Stimme:", e);
-      if (!ttsHint) { ttsHint = true; toast("Menschliche Stimme gerade nicht erreichbar"); }
     }
   }
-  if (cloudTTS === false && !ttsHint) { ttsHint = true; toast("Menschliche Stimme noch nicht eingerichtet – vorerst Gerätestimme"); }
   deviceSpeak(clean, done, my);
+  guard(estimate);
+  // iOS meldet das Ende der Gerätestimme nicht immer -> nachsehen, ob sie noch spricht
+  let quiet = 0;
+  clearInterval(speak.poll);
+  speak.poll = setInterval(() => {
+    if (my !== speakToken) return clearInterval(speak.poll);
+    const busyNow = window.speechSynthesis && (speechSynthesis.speaking || speechSynthesis.pending);
+    quiet = busyNow ? 0 : quiet + 1;
+    if (quiet >= 3) done();               // 1,2 s Stille -> fertig
+  }, 400);
 }
 function deviceSpeak(clean, done, my) {
   if (!window.speechSynthesis) return done();
@@ -1379,46 +1433,59 @@ function showReply(data) {
 
 const hasSR = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 let rec = null;
-function stopListening() { if (rec) { try { rec.abort(); } catch {} rec = null; } const m = $("#mic"); if (m) m.classList.remove("rec", "listen"); }
+function stopListening() {
+  if (rec) { const r = rec; rec = null; try { r.abort(); } catch {} if (r._finish) r._finish(true); }
+  const m = $("#mic"); if (m) m.classList.remove("rec", "listen");
+}
 
 // auto = true: Gesprächsmodus – nach einer Sprechpause wird automatisch gesendet
-function startListening(auto) {
+function startListening(auto, attempt = 0) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR || rec || busy) return;
+  if (!SR || busy) return;
+  if (rec) stopListening();
   const cap = $("#cap"), mic = $("#mic");
   const grow = () => { cap.style.height = "auto"; cap.style.height = Math.min(cap.scrollHeight, 140) + "px"; };
   stopSpeaking();
   const r = new SR(); r.lang = "de-DE"; r.interimResults = true; r.continuous = !auto;
   const base = cap.value ? cap.value.trim() + " " : "";
-  let heard = "", silence = null;
-  r.onresult = (e) => {
-    if (rec !== r) return;         // nach dem Senden eintreffende Reste ignorieren
-    let txt = "";
-    for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
-    heard = txt; cap.value = base + txt; grow();
-    if (auto) { clearTimeout(silence); silence = setTimeout(() => { try { r.stop(); } catch {} }, 1800); }
-  };
-  r.onerror = (e) => {
-    if (e.error === "not-allowed") toast("Mikrofon nicht erlaubt – in den Einstellungen freigeben.");
-    else if (e.error !== "aborted" && e.error !== "no-speech") toast("Diktat: " + e.error);
-  };
-  r.onend = () => {
-    clearTimeout(silence);
+  let heard = "", silence = null, dog = null, over = false;
+  // Ende der Aufnahme – kommt vom Browser (onend) oder vom Wachhund, falls iOS es verschluckt
+  r._finish = (aborted) => {
+    if (over) return; over = true;
+    clearTimeout(silence); clearTimeout(dog);
     const wasActive = rec === r;
     if (wasActive) rec = null;
+    try { r.abort(); } catch {}
     mic.classList.remove("rec", "listen");
+    if (aborted) return;
     if (wasActive && auto && heard.trim()) submit();
     else if (!auto) cap.focus();
   };
-  try { r.start(); rec = r; mic.classList.add(auto ? "listen" : "rec"); }
-  catch { rec = null; if (auto) toast("Zum Weitersprechen aufs Mikrofon tippen."); }
+  r._wrapUp = () => { try { r.stop(); } catch {} clearTimeout(dog); dog = setTimeout(() => r._finish(), 900); };
+  r.onresult = (e) => {
+    if (rec !== r || over) return;         // nach dem Senden eintreffende Reste ignorieren
+    let txt = "";
+    for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+    heard = txt; cap.value = base + txt; grow();
+    if (auto) { clearTimeout(silence); silence = setTimeout(r._wrapUp, 1800); }
+  };
+  r.onerror = (e) => {
+    if (e.error === "not-allowed") toast("Mikrofon nicht erlaubt – in den Einstellungen freigeben.");
+  };
+  r.onend = () => r._finish();
+  try { r.start(); rec = r; mic.classList.add(auto ? "listen" : "rec"); dog = setTimeout(r._wrapUp, 120000); }
+  catch {
+    rec = null;
+    if (attempt < 4) setTimeout(() => startListening(auto, attempt + 1), 500);   // Mikrofon noch belegt
+    else toast("Mikrofon gerade belegt – bitte nochmal tippen.");
+  }
 }
 
 function setupMic() {
   if (!hasSR()) return; // Fallback: Diktier-Taste der Tastatur
   const mic = $("#mic"); mic.classList.remove("hidden");
   mic.onclick = () => {
-    if (rec) { try { rec.stop(); } catch {} return; }
+    if (rec) { rec._wrapUp(); return; }
     unlockSpeech();
     startListening(false);
   };
