@@ -1,6 +1,6 @@
 // Bei jeder Änderung an der App die Versionsnummer erhöhen.
-const CACHE = "zentrale-v11";
-const SHELL = ["./", "index.html", "config.js", "manifest.json", "icon-192.png", "icon-512.png"];
+const CACHE = "zentrale-v12";
+const SHELL = ["./", "index.html", "config.js", "manifest.json", "icon-192.png", "icon-512.png", "nosleep.min.js"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));

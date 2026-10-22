@@ -272,13 +272,14 @@ details.depot .pos small{color:var(--muted);display:block}
 <div id="sheet-root"></div>
 
 <script src="config.js"></script>
+<script src="nosleep.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "11";
+const VERSION = "12";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -488,6 +489,7 @@ function goTab(v) {
   if (v === "agenten") (S.agentOpen ? loadAgent(S.agent) : loadOverview()).then(() => { render(); if (S.agentOpen) scrollChat(); });
 }
 function render() {
+  if (!inChat() && !(typeof V !== "undefined" && V)) keepAwake(false);
   const c = counts();
   const active = TAB_OF[S.view] || S.view;
   $("#tabbar").innerHTML = VIEWS.map(([k, l]) =>
@@ -718,7 +720,36 @@ async function loadOverview() {
 }
 function scrollChat() { requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight)); }
 
+
+// ============================================================
+// Bildschirm wach halten, solange ein Agenten-Gespräch offen ist
+// ============================================================
+let noSleep = null, wakeLockObj = null, awake = false;
+function keepAwake(on) {
+  if (on) {
+    if (awake) return;
+    awake = true;
+    try { if (!noSleep && window.NoSleep) noSleep = new NoSleep(); if (noSleep) { const p = noSleep.enable(); if (p && p.catch) p.catch(() => {}); return; } } catch {}
+    try { if ("wakeLock" in navigator) navigator.wakeLock.request("screen").then((l) => { wakeLockObj = l; }).catch(() => {}); } catch {}
+  } else {
+    if (!awake) return;
+    awake = false;
+    try { if (noSleep) noSleep.disable(); } catch {}
+    try { if (wakeLockObj) wakeLockObj.release(); } catch {}
+    wakeLockObj = null;
+  }
+}
+// Falls die App direkt im Gespräch startet: beim ersten Antippen wach halten
+document.addEventListener("click", () => { if (inChat() && !awake) keepAwake(true); }, true);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  // nach Rückkehr in die App: Wachhaltung erneuern, im Sprechmodus wieder zuhören
+  if (awake) { awake = false; keepAwake(true); }
+  if (typeof V !== "undefined" && V && !vrec && V.state !== "thinking" && V.state !== "speaking") { V.misses = 0; vListen(); }
+});
+
 function startAgent(agent, text) {
+  keepAwake(true);
   S.view = "agenten"; S.agent = agent; S.agentOpen = true; ls.set("view", "agenten"); ls.set("agent", agent); ls.set("agentOpen", true);
   render();
   loadAgent(agent).then(() => { render(); scrollChat(); if (text) askAgent(text); });
@@ -920,6 +951,7 @@ const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 
 function openVoice(agent) {
   if (!hasSR()) { toast("Spracherkennung wird auf diesem Gerät nicht unterstützt."); return; }
+  keepAwake(true);
   stopListening(); stopSpeaking(); unlockSpeech();
   if (agent && AGENTS[agent]) { S.agent = agent; ls.set("agent", agent); }
   S.view = "agenten"; S.agentOpen = true; ls.set("view", "agenten"); ls.set("agentOpen", true);
