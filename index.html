@@ -272,14 +272,14 @@ details.depot .pos small{color:var(--muted);display:block}
 <div id="sheet-root"></div>
 
 <script src="config.js"></script>
-<script src="nosleep.min.js"></script>
+<script src="wake-video.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "12";
+const VERSION = "13";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -724,27 +724,52 @@ function scrollChat() { requestAnimationFrame(() => window.scrollTo(0, document.
 // ============================================================
 // Bildschirm wach halten, solange ein Agenten-Gespräch offen ist
 // ============================================================
-let noSleep = null, wakeLockObj = null, awake = false;
+let wakeLockObj = null, awake = false, wakeVideo = null, wakeTimer = null;
+// Zwei Sicherungen: (1) Wachhaltung von iOS, wird nach jeder Freigabe neu angefordert,
+// (2) unsichtbares, stummes Endlos-Video – das hält iOS zuverlässig wach, auch wenn (1) entzogen wird.
+function wakeRequest() {
+  if (!awake || document.hidden || !("wakeLock" in navigator)) return;
+  if (wakeLockObj && !wakeLockObj.released) return;
+  navigator.wakeLock.request("screen").then((l) => {
+    wakeLockObj = l;
+    l.addEventListener("release", () => { wakeLockObj = null; if (awake && !document.hidden) setTimeout(wakeRequest, 400); });
+  }).catch(() => {});
+}
+function wakeVideoPlay() {
+  if (!awake || !window.WAKE_VIDEO) return;
+  if (!wakeVideo) {
+    const v = document.createElement("video");
+    v.setAttribute("playsinline", ""); v.setAttribute("muted", ""); v.muted = true; v.loop = true; v.title = "";
+    v.style.cssText = "position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:.01;pointer-events:none;z-index:-1";
+    [["webm", WAKE_VIDEO.webm], ["mp4", WAKE_VIDEO.mp4]].forEach(([t, src]) => { const so = document.createElement("source"); so.src = src; so.type = "video/" + t; v.appendChild(so); });
+    // Sicherheitsnetz: kurz vor Ende zurückspulen, falls loop ignoriert wird
+    v.addEventListener("timeupdate", () => { if (v.duration && v.currentTime > v.duration - 0.5) v.currentTime = 0; });
+    document.body.appendChild(v);
+    wakeVideo = v;
+  }
+  if (wakeVideo.paused) { const p = wakeVideo.play(); if (p && p.catch) p.catch(() => {}); }
+}
+function awakeKick() { if (awake) { wakeRequest(); wakeVideoPlay(); } }
 function keepAwake(on) {
   if (on) {
-    if (awake) return;
     awake = true;
-    try { if (!noSleep && window.NoSleep) noSleep = new NoSleep(); if (noSleep) { const p = noSleep.enable(); if (p && p.catch) p.catch(() => {}); return; } } catch {}
-    try { if ("wakeLock" in navigator) navigator.wakeLock.request("screen").then((l) => { wakeLockObj = l; }).catch(() => {}); } catch {}
+    awakeKick();
+    if (!wakeTimer) wakeTimer = setInterval(awakeKick, 10000);   // regelmäßig prüfen und erneuern
   } else {
     if (!awake) return;
     awake = false;
-    try { if (noSleep) noSleep.disable(); } catch {}
+    clearInterval(wakeTimer); wakeTimer = null;
     try { if (wakeLockObj) wakeLockObj.release(); } catch {}
     wakeLockObj = null;
+    try { if (wakeVideo) wakeVideo.pause(); } catch {}
   }
 }
 // Falls die App direkt im Gespräch startet: beim ersten Antippen wach halten
-document.addEventListener("click", () => { if (inChat() && !awake) keepAwake(true); }, true);
+document.addEventListener("click", () => { if (inChat() || (typeof V !== "undefined" && V)) keepAwake(true); }, true);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) return;
   // nach Rückkehr in die App: Wachhaltung erneuern, im Sprechmodus wieder zuhören
-  if (awake) { awake = false; keepAwake(true); }
+  awakeKick();
   if (typeof V !== "undefined" && V && !vrec && V.state !== "thinking" && V.state !== "speaking") { V.misses = 0; vListen(); }
 });
 
@@ -1022,7 +1047,7 @@ function vListen() {
     if (V.misses >= 3) vSet("paused", "Tippe auf den Kreis, um zu sprechen.");
     else setTimeout(vListen, 250);
   };
-  try { r.start(); vrec = r; vSet("listening", "Hört zu …", V.misses ? undefined : "", true); }
+  try { r.start(); vrec = r; vSet("listening", "Hört zu …", V.misses ? undefined : "", true); awakeKick(); }
   catch { vSet("paused", "Tippe auf den Kreis, um zu sprechen."); }
 }
 async function vSend(text) {
@@ -1105,6 +1130,7 @@ async function speak(text, force, onDone, agent, voiceId) {
         p.onerror = () => done();
         p.src = url;
         await p.play();
+        awakeKick();
         return;
       }
     } catch (e) {
