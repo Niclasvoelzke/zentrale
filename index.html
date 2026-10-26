@@ -17,18 +17,18 @@
 :root{
   --bg:#f6f6f4; --surface:#ffffff; --text:#1b1b1a; --muted:#6e6d69; --faint:#a3a29d;
   --line:#e5e4e0; --accent:#245b84; --accent-soft:#e7eef4; --danger:#a33a2c; --warn:#9a6a14;
-  --hi:#b5452f; --radius:10px;
+  --hi:#b5452f; --radius:10px; --hero:#245b84;
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#141414; --surface:#1d1d1c; --text:#ecebe7; --muted:#a09f9a; --faint:#6c6b67;
-    --line:#2d2d2b; --accent:#7fb1d8; --accent-soft:#1f2a33; --danger:#e07a6b; --warn:#d6a54c; --hi:#e07a6b;
+    --line:#2d2d2b; --accent:#7fb1d8; --accent-soft:#1f2a33; --danger:#e07a6b; --warn:#d6a54c; --hi:#e07a6b; --hero:#22506f;
   }
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--text)}
 body{font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;
-  padding-bottom:calc(140px + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
+  padding-bottom:calc(96px + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
 button,input,select,textarea{font:inherit;color:inherit}
 input,select,textarea{font-size:16px}  /* verhindert das Hineinzoomen auf dem iPhone */
 button{cursor:pointer;background:none;border:0;padding:0}
@@ -43,13 +43,33 @@ header{position:sticky;top:0;z-index:10;background:var(--bg);padding-top:env(saf
 .icon-btn{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
 .icon-btn:hover{background:var(--line)}
 .icon-btn svg{width:20px;height:20px}
-/* Tab-Leiste unten (wie iOS) */
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--bg);border-top:1px solid var(--line);
-  display:grid;grid-template-columns:repeat(5,1fr);padding:4px 0 calc(4px + env(safe-area-inset-bottom))}
-.tabbar button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;color:var(--faint);font-size:10.5px;position:relative}
-.tabbar button svg{width:23px;height:23px}
-.tabbar button.on{color:var(--text)}
-.tabbar .b{position:absolute;top:0;left:calc(50% + 8px);min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--hi);color:#fff;font-size:10.5px;line-height:17px;font-weight:600}
+/* Empfang (Startseite mit Räumen) */
+.lobby-head{padding:16px 2px 2px}
+.lobby-head .k{font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.lobby-head h2{font-size:24px;font-weight:700;margin:4px 0 2px;letter-spacing:-.01em}
+.lobby-head .d{color:var(--muted);font-size:14px}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+@media (min-width:700px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.tile{display:flex;flex-direction:column;justify-content:space-between;gap:10px;width:100%;min-height:104px;text-align:left;
+  background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;color:var(--text)}
+.tile:active{transform:scale(.98)}
+.tile .top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tile svg{width:24px;height:24px;color:var(--accent);flex:none}
+.tile b{display:block;font-size:16px;font-weight:700}
+.tile small{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.tile .badge{background:var(--hi);color:#fff;border-radius:999px;font-size:12px;font-weight:700;padding:2px 8px;min-width:22px;text-align:center}
+.tile.hero{margin-top:10px;min-height:118px;background:var(--hero);border-color:var(--hero);color:#fff}
+.tile.hero svg{color:#fff}
+.tile.hero small{color:rgba(255,255,255,.82)}
+.tile.hero .who{display:flex;align-items:center;gap:12px}
+.tile.hero b{font-size:20px}
+.tile .chipz{display:flex;gap:6px;flex-wrap:wrap}
+.tile .chipz span{font-size:13px;font-weight:600;background:rgba(255,255,255,.18);border-radius:999px;padding:4px 10px}
+.tile .chipz span.warn{background:#fff;color:#a33a2c}
+.tile.flat{flex-direction:row;align-items:center;min-height:0;background:transparent;margin-top:10px}
+.tile.flat .who{display:flex;align-items:center;gap:12px;min-width:0}
+.tile.flat svg{color:var(--muted)}
+.tile .chev{color:var(--faint);font-size:20px}
 
 /* Listen */
 main{padding-top:6px}
@@ -79,8 +99,8 @@ main{padding-top:6px}
 .toolbar{display:flex;gap:16px;justify-content:flex-end}
 
 /* Erfassen */
-.capture{position:fixed;left:0;right:0;bottom:calc(54px + env(safe-area-inset-bottom));z-index:20;background:var(--bg);border-top:1px solid var(--line);
-  padding:8px 0}
+.capture{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--bg);border-top:1px solid var(--line);
+  padding:8px 0 calc(8px + env(safe-area-inset-bottom))}
 .cap-row{display:flex;gap:8px;align-items:flex-end}
 .cap-row textarea{flex:1;min-width:0;resize:none;min-height:44px;max-height:140px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);outline:none;line-height:1.35}
 .cap-row textarea:focus{border-color:var(--accent)}
@@ -89,9 +109,20 @@ main{padding-top:6px}
 .round.primary{background:var(--text);color:var(--bg);border-color:var(--text)}
 .round.rec{background:var(--danger);border-color:var(--danger);color:#fff}
 .round:disabled{opacity:.4}
-.reply{margin-bottom:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px;max-height:45vh;overflow:auto}
-.reply .acts{color:var(--muted);font-size:12.5px;margin-top:6px}
-.reply .x{float:right;color:var(--faint);margin-left:8px}
+.reply{margin-bottom:10px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;font-size:14px;max-height:55vh;overflow:auto;
+  box-shadow:0 6px 24px rgba(0,0,0,.12)}
+.rc-head{display:flex;align-items:flex-start;gap:12px}
+.rc-ic{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.rc-ic.ok{background:#e3f1ea;color:#1d6b45}
+@media (prefers-color-scheme: dark){.rc-ic.ok{background:#1d3328;color:#7cc9a0}}
+.rc-ic svg{width:18px;height:18px}
+.rc-main{flex:1;min-width:0}
+.rc-main b{display:block;font-size:15px;font-weight:700}
+.reply .acts{color:var(--text);font-size:14px;margin-top:3px}
+.rc-text{color:var(--muted);font-size:14px;margin-top:6px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.rc-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.rc-btns .btn{min-height:40px;border-radius:20px;padding:8px 16px;font-weight:600}
+.reply .x{flex:none;width:32px;height:32px;margin:-6px -6px 0 0;color:var(--faint);font-size:16px}
 .draft{margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:10px}
 .draft .lbl{font-size:12px;color:var(--muted)}
 .draft input,.draft textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--bg);margin:3px 0 7px}
@@ -266,7 +297,6 @@ details.depot .pos small{color:var(--muted);display:block}
       </div>
     </div>
   </div>
-  <nav class="tabbar" id="tabbar"></nav>
 </div>
 
 <div id="sheet-root"></div>
@@ -279,7 +309,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "14";
+const VERSION = "15";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -342,12 +372,12 @@ let sb = null;
 
 const S = {
   areas: [], projects: [], tasks: [],
-  view: ls.get("view", "heute"),
+  view: "empfang",     // die App startet immer am Empfang
   stack: [],           // Navigation innerhalb Bereiche: [{type:'area',id},{type:'project',id}]
   history: [],         // Gesprächsverlauf mit der KI (nur diese Sitzung)
   showDone: false,
   agent: ls.get("agent", "assistenz"),
-  agentOpen: ls.get("agentOpen", false),
+  agentOpen: false,
   last: {},            // letzte Nachricht je Agent (Übersicht)
   msgs: {},            // Verlauf je Agent (aus der Datenbank)
   notes: {},
@@ -419,14 +449,14 @@ async function start() {
   await loadAll();
   await seedIfEmpty();
   await loadSettings();
-  if (S.view === "agenten") await (S.agentOpen ? loadAgent(S.agent) : loadOverview());
+  await loadOverview();
   render();
   sb.channel("sync")
     .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "areas" }, scheduleReload)
     .on("postgres_changes", { event: "*", schema: "public", table: "site_log" }, scheduleReload)
-    .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => { if (S.view === "agenten" && !busy) (S.agentOpen ? loadAgent(S.agent) : loadOverview()).then(render); })
+    .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => { if (busy) return; (inChat() ? loadAgent(S.agent) : loadOverview()).then(render); })
     .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, () => loadSettings().then(render))
     .on("postgres_changes", { event: "*", schema: "public", table: "investments" }, () => { if (S.view === "agenten") loadAgent(S.agent).then(render); })
     .subscribe();
@@ -459,55 +489,54 @@ async function insertTask(row) {
 // ============================================================
 // Darstellung
 // ============================================================
+const SVG = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const ICON = {
-  heute: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
-  woche: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
-  warten: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
-  bereiche: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
-  agenten: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>',
+  schreibtisch: SVG('<rect x="2.5" y="7" width="19" height="3.5" rx="1"/><path d="M4.5 10.5V19M19.5 10.5V19M13 10.5v5h6.5M8 7V4.5h5V7"/>'),
+  buero: SVG('<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>'),
+  baustellen: SVG('<path d="M3 20h18M5 20V9l7-5 7 5v11"/><path d="M10 20v-5h4v5"/>'),
+  postfach: SVG('<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1.5 2.5h5L16 13h5"/>'),
+  tagebuch: SVG('<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>'),
+  besprechung: SVG('<circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M14 14.4c.8-.3 1.6-.4 2.5-.4 2.3 0 4.2 1.5 4.8 4.5"/>'),
 };
-const VIEWS = [["heute", "Heute"], ["woche", "Woche"], ["warten", "Warten"], ["bereiche", "Projekte"], ["agenten", "Agenten"]];
-const TAB_OF = { eingang: "bereiche", erledigt: "bereiche" };
+const ADVISORS = ["cfo", "investor", "vertrieb", "marketing", "hr"];
 
 function counts() {
   const t = today(), o = open();
   return {
-    heute: o.filter((x) => x.due_date && x.due_date <= t).length,
-    woche: o.filter((x) => x.due_date && x.due_date > t && x.due_date <= addDays(t, 7)).length,
+    heute: o.filter((x) => x.due_date === t).length,
+    over: o.filter((x) => x.due_date && x.due_date < t).length,
     eingang: o.filter((x) => !x.area_id && !x.project_id).length,
     warten: o.filter((x) => x.status === "wartet_auf_mich").length,
-    bereiche: 0,
-    agenten: 0,
   };
 }
 
 const inChat = () => S.view === "agenten" && S.agentOpen;
-function goTab(v) {
-  if (v === "agenten" && S.view === "agenten" && S.agentOpen) { S.agentOpen = false; ls.set("agentOpen", false); stopSpeaking(); }
-  S.view = v; S.stack = []; S.showDone = false; ls.set("view", v);
+// In einen Raum gehen
+function go(view) {
+  stopSpeaking();
+  S.view = view; S.stack = []; S.showDone = false; S.agentOpen = false;
   render(); window.scrollTo(0, 0);
-  if (v === "agenten") (S.agentOpen ? loadAgent(S.agent) : loadOverview()).then(() => { render(); if (S.agentOpen) scrollChat(); });
+  if (view === "agenten") loadOverview().then(render);
+}
+function goBack() {
+  stopSpeaking();
+  if (inChat()) {
+    S.agentOpen = false;
+    if (!ADVISORS.includes(S.agent)) S.view = "empfang";      // Büro und Tagebuch hängen direkt am Empfang
+    loadOverview().then(render);
+  } else if (S.view === "bereiche" && S.stack.length) { S.stack.pop(); S.showDone = false; }
+  else if (S.view === "erledigt" && S.returnTo && S.returnTo !== "erledigt") { S.view = S.returnTo; S.returnTo = null; }
+  else S.view = "empfang";
+  render(); window.scrollTo(0, 0);
 }
 function render() {
   if (!inChat() && !(typeof V !== "undefined" && V)) keepAwake(false);
-  const c = counts();
-  const active = TAB_OF[S.view] || S.view;
-  $("#tabbar").innerHTML = VIEWS.map(([k, l]) =>
-    `<button data-view="${k}" class="${active === k ? "on" : ""}" aria-label="${l}">${ICON[k]}<span>${l}</span>${c[k] ? `<span class="b">${c[k]}</span>` : ""}</button>`).join("");
-  $("#tabbar").querySelectorAll("button").forEach((b) => b.onclick = () => goTab(b.dataset.view));
   updateSendBtn();
   $("#cap").placeholder = inChat() ? (S.agent === "zukunft" ? "Journal-Eintrag …" : `Nachricht an ${agentName(S.agent)} …`) : "Zuruf an die Zentrale …";
-  const back = (S.view === "bereiche" && S.stack.length) || S.view === "eingang" || S.view === "erledigt" || inChat();
-  $("#back").classList.toggle("hidden", !back);
-  $("#back").onclick = () => {
-    stopSpeaking();
-    if (inChat()) { S.agentOpen = false; ls.set("agentOpen", false); loadOverview().then(render); }
-    else if (S.view === "eingang" || S.view === "erledigt") { S.view = S.returnTo || "heute"; }
-    else { S.stack.pop(); S.showDone = false; }
-    render(); window.scrollTo(0, 0);
-  };
+  $("#back").classList.toggle("hidden", S.view === "empfang");
+  $("#back").onclick = goBack;
   const m = $("#main");
-  ({ heute: viewToday, woche: viewWeek, eingang: viewInbox, warten: viewWaiting, bereiche: viewAreas, erledigt: viewDone, agenten: viewAgents }[S.view] || viewToday)(m);
+  ({ empfang: viewLobby, schreibtisch: viewDesk, postfach: viewPost, bereiche: viewAreas, erledigt: viewDone, agenten: viewAgents }[S.view] || viewLobby)(m);
   bindTaskRows(m);
 }
 
@@ -550,55 +579,80 @@ function bindTaskRows(root) {
 
 function setTitle(s) { $("#title").textContent = s; }
 
-function viewToday(m) {
-  setTitle("Heute");
-  const t = today(), o = sortTasks(open());
+function greeting() {
+  const h = new Date().getHours();
+  return h < 11 ? "Guten Morgen" : h < 17 ? "Guten Tag" : "Guten Abend";
+}
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+// Empfang: Startseite mit den Räumen
+function viewLobby(m) {
+  setTitle("Empfang");
+  const c = counts();
+  const lastA = S.last.assistenz, lastJ = S.last.zukunft;
+  const post = [c.eingang ? `${c.eingang} im Eingang` : "", c.warten ? `${c.warten} wartet auf dich` : ""].filter(Boolean).join(" · ") || "Eingang, Warten";
+  const chips = (c.heute ? `<span>${c.heute} heute fällig</span>` : `<span>Heute nichts fällig</span>`) + (c.over ? `<span class="warn">${c.over} überfällig</span>` : "");
+  const advisorNames = ADVISORS.map((k) => agentName(k)).join(" · ");
+  m.innerHTML = `
+    <div class="lobby-head"><h2>${greeting()}, Niclas</h2>
+      <div class="d">${new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}</div></div>
+    <div class="section"><span>Alltag</span></div>
+    <button class="tile hero" data-go="schreibtisch">
+      <div class="top"><div class="who">${ICON.schreibtisch}<div><b>Schreibtisch</b><small>Heute und diese Woche</small></div></div><span class="chev" style="color:#fff">›</span></div>
+      <div class="chipz">${chips}</div>
+    </button>
+    <div class="tiles">
+      <button class="tile" data-go="buero"><div class="top">${ICON.buero}${lastA && lastA.role === "assistant" ? `<small style="margin:0">${ago(lastA.created_at)}</small>` : ""}</div>
+        <div><b>Büro</b><small>${esc(agentName("assistenz"))} · Fragen, Planung</small></div></button>
+      <button class="tile" data-go="bereiche"><div class="top">${ICON.baustellen}</div>
+        <div><b>Baustellen</b><small>Projekte, Bautagebuch</small></div></button>
+      <button class="tile" data-go="postfach"><div class="top">${ICON.postfach}${c.eingang + c.warten ? `<span class="badge">${c.eingang + c.warten}</span>` : ""}</div>
+        <div><b>Postfach</b><small>${esc(post)}</small></div></button>
+      <button class="tile" data-go="tagebuch"><div class="top">${ICON.tagebuch}${lastJ ? `<small style="margin:0">${ago(lastJ.created_at)}</small>` : ""}</div>
+        <div><b>Tagebuch</b><small>Journal, Zukunfts-Ich</small></div></button>
+    </div>
+    <div class="section" style="margin-top:22px"><span>Bei Bedarf</span></div>
+    <button class="tile flat" data-go="agenten"><div class="who">${ICON.besprechung}<div style="min-width:0"><b style="font-size:15px">Besprechungsraum</b>
+      <small style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(advisorNames)}</small></div></div><span class="chev">›</span></button>`;
+  m.querySelectorAll("[data-go]").forEach((b) => b.onclick = () => {
+    const g = b.dataset.go;
+    if (g === "buero") startAgent("assistenz");
+    else if (g === "tagebuch") startAgent("zukunft");
+    else go(g);
+  });
+}
+
+// Schreibtisch: heute und diese Woche, themenübergreifend
+function viewDesk(m) {
+  setTitle("Schreibtisch");
+  const t = today(), end = addDays(t, 7), o = sortTasks(open());
   const over = o.filter((x) => x.due_date && x.due_date < t);
   const now = o.filter((x) => x.due_date === t);
   const active = o.filter((x) => x.status === "in_arbeit" && (!x.due_date || x.due_date > t));
   const doneToday = S.tasks.filter((x) => x.status === "erledigt" && x.done_at && iso(new Date(x.done_at)) === t);
-  let h = section("Überfällig", over, {}, "over") + section("Heute", now) + section("In Arbeit", active) + section("Heute erledigt", doneToday);
-  if (!over.length && !now.length && !active.length) h = `<div class="empty">Für heute ist nichts fällig.</div>` + h;
-  const nIn = counts().eingang;
-  const top = (nIn ? `<div class="list" style="margin-top:12px"><div class="row" id="to-inbox"><span class="name">Eingang</span><span class="cnt">${nIn} unsortiert</span><span class="chev">›</span></div></div>` : "")
-    + `<div class="today-cta"><span>Tag mit ${esc(agentName("assistenz"))} besprechen</span><button class="link-btn" id="to-brief" style="padding:0">Morgenbriefing</button></div>`;
-  m.innerHTML = top + h;
+  let h = `<div class="today-cta"><span>Tag mit ${esc(agentName("assistenz"))} besprechen</span><button class="link-btn" id="to-brief" style="padding:0">Morgenbriefing</button></div>`;
+  h += section("Überfällig", over, {}, "over") + section("Heute", now) + section("In Arbeit", active);
+  if (!over.length && !now.length && !active.length) h += `<div class="empty">Für heute ist nichts fällig.</div>`;
+  let week = "";
+  for (let i = 1; i <= 7; i++) { const d = addDays(t, i); week += section(dayHeading(d), o.filter((x) => x.due_date === d && !(x.status === "in_arbeit"))); }
+  h += week + section("Später", o.filter((x) => x.due_date && x.due_date > end)) + section("Heute erledigt", doneToday);
+  m.innerHTML = h;
   $("#to-brief").onclick = () => startAgent("assistenz", AGENTS.assistenz.quick[0][1]);
-  const ti = $("#to-inbox"); if (ti) ti.onclick = () => { S.returnTo = "heute"; S.view = "eingang"; render(); window.scrollTo(0, 0); };
 }
 
-function viewWeek(m) {
-  setTitle("Diese Woche");
-  const t = today(), end = addDays(t, 7), o = sortTasks(open());
-  const over = o.filter((x) => x.due_date && x.due_date < t);
-  let h = section("Überfällig", over, {}, "over");
-  for (let i = 0; i <= 7; i++) {
-    const d = addDays(t, i);
-    h += section(dayHeading(d), o.filter((x) => x.due_date === d));
-  }
-  const later = o.filter((x) => x.due_date && x.due_date > end);
-  h += section("Später", later);
-  m.innerHTML = h || `<div class="empty">Keine Termine in den nächsten Tagen.</div>`;
-}
-
-function viewInbox(m) {
-  setTitle("Eingang");
-  const inbox = sortTasks(open().filter((x) => !x.area_id && !x.project_id));
-  m.innerHTML = inbox.length
-    ? `<div class="section"><span>Noch nicht einsortiert</span><span>${inbox.length}</span></div>${list(inbox, { hideWhere: true })}
-       <div class="toolbar"><button class="link-btn" id="sort-ai">Von der KI einsortieren lassen</button></div>`
-    : `<div class="empty">Der Eingang ist leer.</div>`;
-  const b = $("#sort-ai");
-  if (b) b.onclick = () => askAgent("Sortiere alle Aufgaben im Eingang in passende Lebensbereiche und Projekte ein, wo die Zuordnung eindeutig ist. Unklare bleiben im Eingang.");
-}
-
-function viewWaiting(m) {
-  setTitle("Warten");
+// Postfach: Eingang (unsortiert) und Warten (beide Richtungen)
+function viewPost(m) {
+  setTitle("Postfach");
   const o = sortTasks(open());
+  const inbox = o.filter((x) => !x.area_id && !x.project_id);
   const mine = o.filter((x) => x.status === "wartet_auf_mich");
   const theirs = o.filter((x) => x.status === "ich_warte");
-  const h = section("Jemand wartet auf mich", mine) + section("Ich warte auf jemanden", theirs);
-  m.innerHTML = h || `<div class="empty">Niemand wartet, und du wartest auf niemanden.</div>`;
+  let h = section("Eingang · noch nicht einsortiert", inbox, { hideWhere: true });
+  if (inbox.length) h += `<div class="toolbar"><button class="link-btn" id="sort-ai">Von der KI einsortieren lassen</button></div>`;
+  h += section("Jemand wartet auf mich", mine) + section("Ich warte auf jemanden", theirs);
+  m.innerHTML = h || `<div class="empty">Alles sortiert. Niemand wartet, und du wartest auf niemanden.</div>`;
+  const b = $("#sort-ai");
+  if (b) b.onclick = () => askAgent("Sortiere alle Aufgaben im Eingang in passende Lebensbereiche und Projekte ein, wo die Zuordnung eindeutig ist. Unklare bleiben im Eingang.");
 }
 
 function viewDone(m) {
@@ -610,25 +664,20 @@ function viewDone(m) {
 function viewAreas(m) {
   const top = S.stack[S.stack.length - 1];
   if (!top) {
-    setTitle("Projekte");
+    setTitle("Baustellen");
     const o = open();
-    const nIn = counts().eingang;
-    m.innerHTML = `<div class="list" style="margin-top:12px"><div class="row" id="to-inbox"><span class="name">Eingang</span><span class="cnt">${nIn || ""}</span><span class="chev">›</span></div>
-      <div class="row" id="to-done2"><span class="name">Erledigt</span><span class="cnt"></span><span class="chev">›</span></div></div>
-      <div class="section"><span>Lebensbereiche</span></div><div class="list">${S.areas.map((a) => {
+    m.innerHTML = `<div class="section"><span>Lebensbereiche</span></div><div class="list">${S.areas.map((a) => {
       const n = o.filter((t) => t.area_id === a.id).length;
       return `<div class="row" data-area="${a.id}"><span class="name">${esc(a.name)}</span><span class="cnt">${n || ""}</span><span class="chev">›</span></div>`;
     }).join("")}</div>
-    <div class="toolbar"><button class="link-btn" id="new-area">Bereich anlegen</button><button class="link-btn hidden" id="to-done"></button></div>`;
+    <div class="toolbar"><button class="link-btn" id="to-done">Erledigte ansehen</button><button class="link-btn" id="new-area">Bereich anlegen</button></div>`;
     m.querySelectorAll("[data-area]").forEach((r) => r.onclick = () => { S.stack.push({ type: "area", id: r.dataset.area }); render(); window.scrollTo(0, 0); });
     $("#new-area").onclick = async () => {
       const name = prompt("Name des Lebensbereichs"); if (!name) return;
       const { data: { user } } = await sb.auth.getUser();
       await sb.from("areas").insert({ name: name.trim(), sort: S.areas.length, user_id: user.id }); scheduleReload();
     };
-    $("#to-done").onclick = () => { S.returnTo = "bereiche"; S.view = "erledigt"; render(); };
-    $("#to-done2").onclick = () => { S.returnTo = "bereiche"; S.view = "erledigt"; render(); window.scrollTo(0, 0); };
-    $("#to-inbox").onclick = () => { S.returnTo = "bereiche"; S.view = "eingang"; render(); window.scrollTo(0, 0); };
+    $("#to-done").onclick = () => { S.returnTo = "bereiche"; S.view = "erledigt"; render(); window.scrollTo(0, 0); };
     return;
   }
   if (top.type === "area") {
@@ -774,6 +823,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 function startAgent(agent, text) {
+  if (agent === "assistenz" && !$("#reply").querySelector(".draft")) hideReply();
   keepAwake(true); probeTTS();
   S.view = "agenten"; S.agent = agent; S.agentOpen = true; ls.set("view", "agenten"); ls.set("agent", agent); ls.set("agentOpen", true);
   render();
@@ -793,7 +843,7 @@ function ago(ts) {
   return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
 }
 function viewAgentList(m) {
-  setTitle("Agenten");
+  setTitle("Besprechungsraum");
   const row = (k) => {
     const d = AGENTS[k], last = S.last[k];
     const nm = k === "zukunft" ? "Journal" : agentName(k);
@@ -802,8 +852,8 @@ function viewAgentList(m) {
       <span class="who"><b>${esc(nm)}${k !== "zukunft" ? ` <span style="font-weight:400;color:var(--muted);font-size:13px">· ${esc(d.label)}</span>` : ""}</b><small>${esc(sub)}</small></span>
       ${last ? `<span class="cnt">${ago(last.created_at)}</span>` : ""}${hasSR() ? `<button class="vbtn" data-voice="${k}" aria-label="Sprechen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg></button>` : `<span class="chev">›</span>`}</div>`;
   };
-  m.innerHTML = `<div class="section"><span>Persönlich</span></div><div class="list agents">${["assistenz", "zukunft"].map(row).join("")}</div>
-    <div class="section"><span>Beratung</span></div><div class="list agents">${["cfo", "investor", "vertrieb", "marketing", "hr"].map(row).join("")}</div>`;
+  m.innerHTML = `<div class="agent-intro" style="margin-top:14px">Deine Berater für die großen Themen. Antippen öffnet das Gespräch.</div>
+    <div class="list agents">${ADVISORS.map(row).join("")}</div>`;
   m.querySelectorAll("[data-agent]").forEach((r) => r.onclick = () => startAgent(r.dataset.agent));
   m.querySelectorAll("[data-voice]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openVoice(b.dataset.voice); });
 }
@@ -812,7 +862,7 @@ function viewAgents(m) {
   if (!S.agentOpen) return viewAgentList(m);
   const a = AGENTS[S.agent] ? S.agent : "assistenz";
   const def = AGENTS[a];
-  setTitle(a === "zukunft" ? "Journal" : `${agentName(a)} · ${def.label}`);
+  setTitle(a === "zukunft" ? "Tagebuch" : a === "assistenz" ? `Büro · ${agentName(a)}` : `${agentName(a)} · ${def.label}`);
   const msgs = S.msgs[a] || [];
   if (cloudTTS === null) probeTTS();
   let h = msgs.length ? "" : `<div class="agent-intro" style="margin-top:12px">${esc(def.intro)}</div>`;
@@ -1086,7 +1136,7 @@ async function vSend(text) {
     const { data, error } = await Promise.race([call, limit]);
     if (error || data?.error) throw new Error(data?.error || (await errText(error)));
     loadAgent(agent).then(() => { if (inChat()) { render(); scrollChat(); } });
-    if (data.drafts?.length) showReply({ reply: "Mail-Entwurf zur Freigabe:", actions: [], drafts: data.drafts });
+    if (data.drafts?.length) showReply({ title: "Mail-Entwurf zur Freigabe", reply: "", actions: [], drafts: data.drafts });
     scheduleReload();
     if (V !== session) return;
     const reply = data.reply || "Erledigt.";
@@ -1250,7 +1300,7 @@ function openSheet(t) {
   const isNew = !t;
   const top = S.stack[S.stack.length - 1];
   t = t || {
-    title: "", notes: "", status: "offen", priority: 2, person: "", due_date: S.view === "heute" ? today() : null,
+    title: "", notes: "", status: "offen", priority: 2, person: "", due_date: S.view === "schreibtisch" ? today() : null,
     area_id: S.view === "bereiche" && top ? (top.type === "area" ? top.id : projOf(top.id)?.area_id) : null,
     project_id: S.view === "bereiche" && top && top.type === "project" ? top.id : null,
   };
@@ -1314,7 +1364,7 @@ function openMenu() {
   root.querySelector(".sheet-bg").onclick = (e) => { if (e.target.classList.contains("sheet-bg")) close(); };
   $("#m-close").onclick = close;
   $("#m-reload").onclick = () => location.reload();
-  $("#m-done").onclick = () => { close(); S.view = "erledigt"; S.stack = []; render(); };
+  $("#m-done").onclick = () => { close(); S.returnTo = S.view; S.view = "erledigt"; S.stack = []; S.agentOpen = false; render(); };
   $("#m-out").onclick = async () => { await sb.auth.signOut(); location.reload(); };
 }
 
@@ -1330,6 +1380,10 @@ function setupCapture() {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
   });
   $("#send").onclick = submit;
+  // Tastatur schließen, sobald man irgendwo anders hintippt oder scrollt
+  const closeKb = (e) => { if (document.activeElement === cap && !e.target.closest(".capture")) cap.blur(); };
+  document.addEventListener("touchstart", closeKb, { passive: true });
+  document.addEventListener("mousedown", closeKb);
   $("#vstart").onclick = () => openVoice(S.agent);
   $("#add").onclick = () => openSheet(null);
   $("#menu").onclick = openMenu;
@@ -1349,28 +1403,35 @@ function submit() {
   if (!text || busy) return;
   if (ls.get("tts", true)) unlockSpeech();
   cap.value = ""; cap.style.height = "auto"; updateSendBtn();
+  if (!inChat()) cap.blur();       // Tastatur zu, damit die Bestätigung zu sehen ist
   askAgent(text);
 }
+
+const ICON_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const ICON_MSG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>';
+function hideReply() { clearTimeout(showReply.t); $("#reply").classList.add("hidden"); }
 
 async function askAgent(text) {
   if (inChat()) return askPersona(text);
   busy = true; $("#send").disabled = true;
   const r = $("#reply");
+  clearTimeout(showReply.t);
   r.classList.remove("hidden");
-  r.innerHTML = `<span class="spin"></span>${esc(text)}`;
+  r.innerHTML = `<div class="rc-head"><span class="rc-ic"><span class="spin" style="margin:0"></span></span>
+    <div class="rc-main"><b>${esc(agentName("assistenz"))} kümmert sich darum</b><div class="rc-text">${esc(text)}</div></div></div>`;
   try {
-    const { data, error } = await sb.functions.invoke("agent", { body: { message: text, history: S.history } });
+    const { data, error } = await sb.functions.invoke("agent", { body: { agent: "assistenz", message: text } });
     if (error || data?.error) throw new Error(data?.error || (await errText(error)));
-    S.history.push({ role: "user", content: text }, { role: "assistant", content: data.reply || "" });
-    S.history = S.history.slice(-10);
     showReply(data);
+    loadOverview().then(() => { if (S.view === "empfang") render(); });
     scheduleReload();
   } catch (e) {
     // Nichts geht verloren: Zuruf landet unverändert im Eingang
     await insertTask({ title: text.slice(0, 200), notes: text.length > 200 ? text : null });
-    r.innerHTML = `<button class="x" aria-label="Schließen">✕</button>Die KI war nicht erreichbar. Dein Zuruf liegt im Eingang.
-      <div class="acts">${esc(e.message || e)}</div>`;
-    r.querySelector(".x").onclick = () => r.classList.add("hidden");
+    r.innerHTML = `<div class="rc-head"><span class="rc-ic">${ICON_MSG}</span><div class="rc-main"><b>KI nicht erreichbar</b>
+      <div class="acts">Dein Zuruf liegt im Postfach (Eingang).</div><div class="rc-text">${esc(e.message || e)}</div></div>
+      <button class="x" aria-label="Schließen">✕</button></div>`;
+    r.querySelector(".x").onclick = hideReply;
   } finally {
     busy = false; $("#send").disabled = false;
   }
@@ -1385,7 +1446,7 @@ async function askPersona(text) {
     S.pending = null;
     await loadAgent(agent);
     if (inChat() && S.agent === agent) { render(); scrollChat(); }
-    if (data.drafts?.length) showReply({ reply: "Mail-Entwurf zur Freigabe:", actions: [], drafts: data.drafts });
+    if (data.drafts?.length) showReply({ title: "Mail-Entwurf zur Freigabe", reply: "", actions: [], drafts: data.drafts });
     scheduleReload();
   } catch (e) {
     S.pending = null;
@@ -1403,6 +1464,9 @@ async function errText(error) {
 
 function showReply(data) {
   const r = $("#reply");
+  const acts = data.actions || [];
+  const reply = String(data.reply || "").trim();
+  const showText = reply && !(acts.length && /^erledigt\.?$/i.test(reply));
   const drafts = (data.drafts || []).map((d, i) => `
     <div class="draft" data-i="${i}">
       <div class="lbl">${d.kind === "kunde" ? "Kundenmail – bitte prüfen" : "Interne Mail"}</div>
@@ -1411,9 +1475,16 @@ function showReply(data) {
       <div class="lbl">Text</div><textarea class="d-body">${esc(d.body)}</textarea>
       <div class="btns"><button class="btn primary d-send">In Mail-App öffnen</button><button class="btn d-copy">Text kopieren</button><button class="btn d-drop">Verwerfen</button></div>
     </div>`).join("");
-  r.innerHTML = `<button class="x" aria-label="Schließen">✕</button>${esc(data.reply || "Erledigt.")}
-    ${data.actions?.length ? `<div class="acts">${data.actions.map(esc).join("<br>")}</div>` : ""}${drafts}`;
-  r.querySelector(".x").onclick = () => r.classList.add("hidden");
+  const title = data.title || (acts.length ? (acts.length === 1 ? "Erledigt" : `${acts.length} Dinge erledigt`) : `${agentName("assistenz")} hat geantwortet`);
+  r.classList.remove("hidden");
+  r.innerHTML = `<div class="rc-head"><span class="rc-ic ${acts.length ? "ok" : ""}">${acts.length ? ICON_OK : ICON_MSG}</span>
+      <div class="rc-main"><b>${esc(title)}</b>${acts.length ? `<div class="acts">${acts.map(esc).join("<br>")}</div>` : ""}
+      ${showText ? `<div class="rc-text">${esc(reply.replace(/\*\*(.+?)\*\*/g, "$1"))}</div>` : ""}</div>
+      <button class="x" aria-label="Schließen">✕</button></div>
+    ${data.title ? "" : `<div class="rc-btns"><button class="btn primary" id="rc-buero">Im Büro lesen</button></div>`}${drafts}`;
+  r.querySelector(".x").onclick = hideReply;
+  const rb = r.querySelector("#rc-buero");
+  if (rb) rb.onclick = () => { hideReply(); startAgent("assistenz"); };
   r.querySelectorAll(".draft").forEach((el) => {
     const get = () => ({ to: el.querySelector(".d-to").value.trim(), sub: el.querySelector(".d-sub").value, body: el.querySelector(".d-body").value });
     el.querySelector(".d-send").onclick = () => {
@@ -1423,12 +1494,11 @@ function showReply(data) {
     el.querySelector(".d-copy").onclick = async () => {
       const d = get(); try { await navigator.clipboard.writeText(d.body); toast("Kopiert"); } catch { toast("Kopieren nicht möglich"); }
     };
-    el.querySelector(".d-drop").onclick = () => el.remove();
+    el.querySelector(".d-drop").onclick = () => { el.remove(); if (!r.querySelector(".draft") && data.title) hideReply(); };
   });
-  if (!data.drafts?.length && !data.reply?.includes("?")) {
-    clearTimeout(showReply.t);
-    showReply.t = setTimeout(() => { if (!r.querySelector(".draft")) r.classList.add("hidden"); }, 9000);
-  }
+  // Reine Bestätigungen verschwinden von selbst; Antworten bleiben, bis du sie schließt (und stehen immer im Büro)
+  clearTimeout(showReply.t);
+  if (acts.length && !drafts && reply.length <= 160 && !reply.includes("?")) showReply.t = setTimeout(hideReply, 8000);
 }
 
 const hasSR = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);
