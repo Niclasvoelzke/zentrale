@@ -312,7 +312,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "16";
+const VERSION = "17";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -1062,6 +1062,7 @@ function openVoice(agent) {
   vListen();
 }
 function closeVoice() {
+  vl("beendet"); clearTimeout(vl.t); vlSave();
   V = null; vStopRec(); stopSpeaking(); clearTimeout(vListen.retry);
   const el = $("#voice"); if (el) el.remove();
   render(); scrollChat();
@@ -1084,6 +1085,24 @@ function vStopRec() {
 // Zuhören. iOS verschluckt gelegentlich Ereignisse (kein onend, start() blockiert) –
 // deshalb läuft jede Runde mit eigener Kennung und Wachhund, nie wird auf ein Ereignis "für immer" gewartet.
 let vGen = 0;
+// Diagnose: was die Spracherkennung meldet, wird kurz in den Einstellungen abgelegt (Schlüssel voice_debug)
+const vLog = [];
+function vl(ev) {
+  if (!V) return;
+  if (!V.t0) V.t0 = Date.now();
+  vLog.push(`${((Date.now() - V.t0) / 1000).toFixed(1)}s ${V.agent} ${ev}`);
+  if (vLog.length > 120) vLog.splice(0, vLog.length - 120);
+  clearTimeout(vl.t); vl.t = setTimeout(vlSave, 1500);
+}
+async function vlSave() {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return;
+    await sb.from("settings").upsert({ user_id: session.user.id, key: "voice_debug",
+      value: { ua: navigator.userAgent, v: VERSION, at: new Date().toISOString(), msgs: Object.fromEntries(Object.entries(S.msgs).map(([k, x]) => [k, (x || []).length])), log: vLog.slice() },
+      updated_at: new Date().toISOString() });
+  } catch {}
+}
 function vListen(attempt = 0) {
   if (!V || V.state === "thinking" || V.state === "speaking") return;
   if (vrec) vStopRec();
@@ -1091,6 +1110,9 @@ function vListen(attempt = 0) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const r = new SR(); r.lang = "de-DE"; r.interimResults = true; r.continuous = true;
   let heard = "", silence = null, dog = null, over = false;
+  vl(`listen#${gen} try${attempt}`);
+  ["start", "audiostart", "soundstart", "speechstart", "speechend", "soundend", "audioend", "nomatch"].forEach((ev) =>
+    { r["on" + ev] = () => vl(`#${gen} ${ev}`); });
   const finish = () => {
     if (over) return; over = true;
     clearTimeout(silence); clearTimeout(dog);
@@ -1099,12 +1121,13 @@ function vListen(attempt = 0) {
     if (gen !== vGen || !V) return;            // inzwischen neu gestartet oder beendet
     if (heard) { V.misses = 0; vSend(heard); return; }
     V.misses++;
-    if (V.misses >= 3) vSet("paused", "Tippe auf den Kreis, um zu sprechen.", "");
+    if (V.misses >= 3) vSet("paused", "Tippe auf den Kreis, um zu sprechen.", V.lastErr ? `Mikrofon meldet: ${V.lastErr}` : "");
     else vListen.retry = setTimeout(() => vListen(), 400);
   };
   // stoppen und höchstens 900 ms auf das Ende warten
   const wrapUp = () => { try { r.stop(); } catch {} clearTimeout(dog); dog = setTimeout(finish, 900); };
   r.onresult = (e) => {
+    vl(`#${gen} result n=${e.results.length} "${srText(e.results).slice(0, 40)}"${gen !== vGen ? " (alt)" : ""}`);
     if (gen !== vGen || over) return;
     heard = srText(e.results);
     vSet("listening", "Hört zu …", heard, true);
@@ -1113,19 +1136,22 @@ function vListen(attempt = 0) {
     dog = setTimeout(wrapUp, 45000);           // Sicherheitsgrenze für sehr lange Beiträge
   };
   r.onerror = (e) => {
+    vl(`#${gen} error ${e.error}${e.message ? " " + e.message : ""}`);
     if (gen !== vGen) return;
+    if (V) V.lastErr = e.error;
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
       over = true; vrec = null; clearTimeout(silence); clearTimeout(dog);
       vSet("paused", "Mikrofon nicht freigegeben – in den iPhone-Einstellungen erlauben.", "");
     }
   };
-  r.onend = () => { if (gen === vGen) finish(); };
+  r.onend = () => { vl(`#${gen} end`); if (gen === vGen) finish(); };
   try {
     r.start(); vrec = r;
     vSet("listening", "Hört zu …", V.misses ? undefined : "", true);
     dog = setTimeout(wrapUp, 10000);           // 10 s nichts gehört -> Runde beenden, neu ansetzen
     awakeKick();
-  } catch {
+  } catch (err) {
+    vl(`#${gen} start-fehler ${err && err.name}`);
     // Mikrofon noch vom letzten Durchgang belegt -> kurz warten und erneut versuchen
     if (attempt < 6) { vSet("listening", "Einen Moment …", undefined); vListen.retry = setTimeout(() => { if (gen === vGen) { vGen++; vListen(attempt + 1); } }, 500); }
     else vSet("paused", "Tippe auf den Kreis, um zu sprechen.", "");
