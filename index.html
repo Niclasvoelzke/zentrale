@@ -195,6 +195,9 @@ details.depot .pos small{color:var(--muted);display:block}
 .agents .who small{display:block;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pillrow{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 2px}
 .pill{padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;color:var(--muted)}
+.pill.talk{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.pill.talk svg{width:15px;height:15px}
+.tile .vbtn{margin:0}
 .pill.on{border-color:var(--text);color:var(--text);font-weight:600}
 .today-cta{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:var(--radius);font-size:14px;color:var(--muted)}
 
@@ -309,7 +312,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "15";
+const VERSION = "16";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -602,18 +605,19 @@ function viewLobby(m) {
       <div class="chipz">${chips}</div>
     </button>
     <div class="tiles">
-      <button class="tile" data-go="buero"><div class="top">${ICON.buero}${lastA && lastA.role === "assistant" ? `<small style="margin:0">${ago(lastA.created_at)}</small>` : ""}</div>
+      <button class="tile" data-go="buero"><div class="top">${ICON.buero}${hasSR() ? `<span class="vbtn" data-voice="assistenz" role="button" aria-label="Mit ${esc(agentName("assistenz"))} sprechen">${ICON_WAVE}</span>` : lastA && lastA.role === "assistant" ? `<small style="margin:0">${ago(lastA.created_at)}</small>` : ""}</div>
         <div><b>Büro</b><small>${esc(agentName("assistenz"))} · Fragen, Planung</small></div></button>
       <button class="tile" data-go="bereiche"><div class="top">${ICON.baustellen}</div>
         <div><b>Baustellen</b><small>Projekte, Bautagebuch</small></div></button>
       <button class="tile" data-go="postfach"><div class="top">${ICON.postfach}${c.eingang + c.warten ? `<span class="badge">${c.eingang + c.warten}</span>` : ""}</div>
         <div><b>Postfach</b><small>${esc(post)}</small></div></button>
-      <button class="tile" data-go="tagebuch"><div class="top">${ICON.tagebuch}${lastJ ? `<small style="margin:0">${ago(lastJ.created_at)}</small>` : ""}</div>
+      <button class="tile" data-go="tagebuch"><div class="top">${ICON.tagebuch}${hasSR() ? `<span class="vbtn" data-voice="zukunft" role="button" aria-label="Journal sprechen">${ICON_WAVE}</span>` : lastJ ? `<small style="margin:0">${ago(lastJ.created_at)}</small>` : ""}</div>
         <div><b>Tagebuch</b><small>Journal, Zukunfts-Ich</small></div></button>
     </div>
     <div class="section" style="margin-top:22px"><span>Bei Bedarf</span></div>
     <button class="tile flat" data-go="agenten"><div class="who">${ICON.besprechung}<div style="min-width:0"><b style="font-size:15px">Besprechungsraum</b>
       <small style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(advisorNames)}</small></div></div><span class="chev">›</span></button>`;
+  m.querySelectorAll(".tile [data-voice]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openVoice(b.dataset.voice); });
   m.querySelectorAll("[data-go]").forEach((b) => b.onclick = () => {
     const g = b.dataset.go;
     if (g === "buero") startAgent("assistenz");
@@ -878,6 +882,7 @@ function viewAgents(m) {
   }
 
   h += `<div class="pillrow">
+    ${hasSR() ? `<button id="vtalk" class="pill talk">${ICON_WAVE}Sprechen</button>` : ""}
     <button id="notes" class="pill">Gemerktes ${(S.notes[a] || []).length}</button>
     ${cloudTTS ? `<button id="vpick" class="pill">Stimme${S.voices[a] ? ": " + esc(S.voices[a].name) : ""}</button>` : ""}
     <button id="tpl" class="pill ${S.templates[a] ? "on" : ""}">${S.templates[a] ? "Vorlage aktiv" : "Vorlage"}</button>
@@ -917,6 +922,7 @@ function viewAgents(m) {
   $("#tpl").onclick = () => openTemplate(a);
   if ($("#vpick")) $("#vpick").onclick = () => openVoicePicker(a);
   $("#notes").onclick = () => openNotes(a);
+  if ($("#vtalk")) $("#vtalk").onclick = () => openVoice(a);
   if ($("#rename")) $("#rename").onclick = async () => {
     const n = prompt(`Name für ${def.label}`, agentName(a));
     if (n === null) return;
@@ -1019,6 +1025,7 @@ function openNotes(a) {
 // Sprechmodus: zuhören → antworten (laut) → wieder zuhören
 // ============================================================
 let V = null, vrec = null;
+const ICON_WAVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>';
 const ICON_MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
 const ICON_MICOFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3l18 18M9 9v2a3 3 0 0 0 5.1 2.1M15 10V6a3 3 0 0 0-5.7-1.3M5 11a7 7 0 0 0 11.7 5.2M19 11a7 7 0 0 1-.6 2.8M12 18v3"/></svg>';
 const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
@@ -1099,9 +1106,7 @@ function vListen(attempt = 0) {
   const wrapUp = () => { try { r.stop(); } catch {} clearTimeout(dog); dog = setTimeout(finish, 900); };
   r.onresult = (e) => {
     if (gen !== vGen || over) return;
-    let txt = "";
-    for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
-    heard = txt.trim();
+    heard = srText(e.results);
     vSet("listening", "Hört zu …", heard, true);
     clearTimeout(silence); clearTimeout(dog);
     silence = setTimeout(wrapUp, 1500);        // 1,5 s Pause = fertig gesprochen
@@ -1154,6 +1159,17 @@ function pickVoice() {
   if (!window.speechSynthesis) return null;
   const vs = speechSynthesis.getVoices().filter((v) => /^de(-|_|$)/i.test(v.lang));
   const rank = (v) => (/premium|enhanced|natural|neural/i.test(v.name) ? 0 : /google|anna|helena|petra|markus|yannick|katja/i.test(v.name) ? 1 : 2) + (v.localService ? 0 : 0.5);
+  return vs.sort((x, y) => rank(x) - rank(y))[0] || null;
+}
+const MALE_AGENTS = ["investor", "cfo", "vertrieb", "zukunft"];
+const MALE_RX = /markus|yannick|martin|viktor|reed|eddy|grandpa|rocko|daniel|hans|stefan|conrad|male|männlich/i;
+const FEMALE_RX = /anna|helena|petra|katja|sandy|shelley|flo|grandma|marlene|vicki|female|weiblich/i;
+function voiceFor(agent) {
+  if (!window.speechSynthesis) return null;
+  const vs = speechSynthesis.getVoices().filter((v) => /^de(-|_|$)/i.test(v.lang));
+  const male = MALE_AGENTS.includes(agent);
+  const rx = male ? MALE_RX : FEMALE_RX;
+  const rank = (v) => (rx.test(v.name) ? 0 : 3) + (/premium|enhanced|natural|neural|erweitert/i.test(v.name) ? 0 : 1);
   return vs.sort((x, y) => rank(x) - rank(y))[0] || null;
 }
 if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { voice = pickVoice(); };
@@ -1234,7 +1250,7 @@ async function speak(text, force, onDone, agent, voiceId) {
       console.warn("Stimme:", e);
     }
   }
-  deviceSpeak(clean, done, my);
+  deviceSpeak(clean, done, my, agent || S.agent);
   guard(estimate);
   // iOS meldet das Ende der Gerätestimme nicht immer -> nachsehen, ob sie noch spricht
   let quiet = 0;
@@ -1246,10 +1262,10 @@ async function speak(text, force, onDone, agent, voiceId) {
     if (quiet >= 3) done();               // 1,2 s Stille -> fertig
   }, 400);
 }
-function deviceSpeak(clean, done, my) {
+function deviceSpeak(clean, done, my, agent) {
   if (!window.speechSynthesis) return done();
   const parts = clean.replace(/€/g, " Euro").match(/[^.!?]+[.!?]*/g) || [clean];
-  voice = voice || pickVoice();
+  const voice = voiceFor(agent) || pickVoice();
   parts.forEach((part, i) => {
     const u = new SpeechSynthesisUtterance(part.trim()); u.lang = "de-DE"; if (voice) u.voice = voice;
     if (i === parts.length - 1) { u.onend = () => { if (my === speakToken) done(); }; u.onerror = u.onend; }
@@ -1501,6 +1517,20 @@ function showReply(data) {
   if (acts.length && !drafts && reply.length <= 160 && !reply.includes("?")) showReply.t = setTimeout(hideReply, 8000);
 }
 
+// iOS liefert im Dauermodus dieselbe Passage teils doppelt oder kumuliert – daraus einen sauberen Text machen
+function srText(results) {
+  let txt = "";
+  for (let i = 0; i < results.length; i++) {
+    const t = String(results[i][0].transcript || "").trim();
+    if (!t) continue;
+    const a = txt.toLowerCase(), b = t.toLowerCase();
+    if (!txt) txt = t;
+    else if (b.startsWith(a)) txt = t;          // kumuliert: neue Fassung enthält die alte
+    else if (a.endsWith(b)) continue;           // doppelt geliefert
+    else txt += " " + t;
+  }
+  return txt;
+}
 const hasSR = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 let rec = null;
 function stopListening() {
@@ -1534,8 +1564,7 @@ function startListening(auto, attempt = 0) {
   r._wrapUp = () => { try { r.stop(); } catch {} clearTimeout(dog); dog = setTimeout(() => r._finish(), 900); };
   r.onresult = (e) => {
     if (rec !== r || over) return;         // nach dem Senden eintreffende Reste ignorieren
-    let txt = "";
-    for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+    const txt = srText(e.results);
     heard = txt; cap.value = base + txt; grow();
     if (auto) { clearTimeout(silence); silence = setTimeout(r._wrapUp, 1800); }
   };
