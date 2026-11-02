@@ -89,6 +89,13 @@ main{padding-top:6px}
 .m{font-size:12.5px;color:var(--muted);margin-top:2px;display:flex;flex-wrap:wrap;gap:0 10px}
 .m .due.over{color:var(--danger)} .m .due.today{color:var(--accent)}
 .m .st{color:var(--warn)}
+.m .where{color:var(--accent);font:inherit;padding:0;text-align:left;cursor:pointer}
+.task .rep{flex:none;width:36px;height:36px;margin:-8px -8px -8px 0;display:grid;place-items:center;color:var(--faint);border-radius:8px}
+.task .rep svg{width:19px;height:19px}
+.task .rep:active,.task .rep.on{color:var(--accent);background:var(--accent-soft)}
+.refchip{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:7px 8px 7px 12px;background:var(--accent-soft);color:var(--accent);border-radius:10px;font-size:13.5px}
+.refchip span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.refchip button{flex:none;width:28px;height:28px;color:var(--accent);font-size:15px}
 .row{display:flex;align-items:center;gap:10px;padding:13px 12px;border-top:1px solid var(--line);cursor:pointer}
 .row:first-child{border-top:0}
 .row .name{flex:1}
@@ -288,6 +295,7 @@ details.depot .pos small{color:var(--muted);display:block}
   <div class="capture">
     <div class="wrap">
       <div id="reply" class="reply hidden"></div>
+      <div id="refchip" class="refchip hidden"><span></span><button aria-label="Bezug entfernen">✕</button></div>
       <div class="cap-row">
         <textarea id="cap" rows="1" placeholder="Zuruf an die Zentrale …" enterkeyhint="send"></textarea>
         <button class="round hidden" id="mic" title="Diktieren" aria-label="Diktieren">
@@ -312,7 +320,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "17";
+const VERSION = "18";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -517,17 +525,20 @@ const inChat = () => S.view === "agenten" && S.agentOpen;
 // In einen Raum gehen
 function go(view) {
   stopSpeaking();
-  S.view = view; S.stack = []; S.showDone = false; S.agentOpen = false;
+  S.view = view; S.stack = []; S.showDone = false; S.agentOpen = false; S.from = null;
+  clearRef();
   render(); window.scrollTo(0, 0);
   if (view === "agenten") loadOverview().then(render);
 }
 function goBack() {
   stopSpeaking();
+  clearRef();
   if (inChat()) {
     S.agentOpen = false;
     if (!ADVISORS.includes(S.agent)) S.view = "empfang";      // Büro und Tagebuch hängen direkt am Empfang
     loadOverview().then(render);
-  } else if (S.view === "bereiche" && S.stack.length) { S.stack.pop(); S.showDone = false; }
+  } else if (S.view === "bereiche" && S.from && S.stack.length <= S.fromDepth) { S.view = S.from; S.from = null; S.stack = []; S.showDone = false; }
+  else if (S.view === "bereiche" && S.stack.length) { S.stack.pop(); S.showDone = false; }
   else if (S.view === "erledigt" && S.returnTo && S.returnTo !== "erledigt") { S.view = S.returnTo; S.returnTo = null; }
   else S.view = "empfang";
   render(); window.scrollTo(0, 0);
@@ -535,7 +546,7 @@ function goBack() {
 function render() {
   if (!inChat() && !(typeof V !== "undefined" && V)) keepAwake(false);
   updateSendBtn();
-  $("#cap").placeholder = inChat() ? (S.agent === "zukunft" ? "Journal-Eintrag …" : `Nachricht an ${agentName(S.agent)} …`) : "Zuruf an die Zentrale …";
+  updatePlaceholder();
   $("#back").classList.toggle("hidden", S.view === "empfang");
   $("#back").onclick = goBack;
   const m = $("#main");
@@ -548,7 +559,8 @@ function taskRow(t, opts = {}) {
   const meta = [];
   if (!opts.hideWhere) {
     const a = areaOf(t.area_id), p = projOf(t.project_id);
-    meta.push(esc(p ? `${a ? a.name + " › " : ""}${p.name}` : a ? a.name : "Eingang"));
+    const label = esc(p ? `${a ? a.name + " › " : ""}${p.name}` : a ? a.name : "Eingang");
+    meta.push(p || a ? `<button class="where" data-act="where" aria-label="Zu ${label}">${label} ›</button>` : label);
   }
   if (t.due_date && t.status !== "erledigt") {
     const cls = t.due_date < t0 ? "over" : t.due_date === t0 ? "today" : "";
@@ -560,6 +572,7 @@ function taskRow(t, opts = {}) {
   return `<div class="task ${t.status === "erledigt" ? "done" : ""} ${t.priority === 1 ? "p1" : ""}" data-id="${t.id}">
     <button class="check" data-act="toggle" aria-label="Erledigt umschalten"></button>
     <div class="tbody" data-act="open"><div class="t">${esc(t.title)}</div>${meta.length ? `<div class="m">${meta.join("<span>·</span>")}</div>` : ""}</div>
+    ${opts.reply && t.status !== "erledigt" ? `<button class="rep ${S.ref && S.ref.task_id === t.id ? "on" : ""}" data-act="reply" aria-label="Dazu an ${esc(agentName("assistenz"))} schreiben">${ICON_REPLY}</button>` : ""}
   </div>`;
 }
 function list(tasks, opts) {
@@ -577,7 +590,56 @@ function bindTaskRows(root) {
       saveTask(id, { status: t.status === "erledigt" ? "offen" : "erledigt", done_at: t.status === "erledigt" ? null : new Date().toISOString() });
     };
     el.querySelector('[data-act="open"]').onclick = () => openSheet(S.tasks.find((x) => x.id === id));
+    const w = el.querySelector('[data-act="where"]');
+    if (w) w.onclick = (e) => { e.stopPropagation(); goTo(S.tasks.find((x) => x.id === id)); };
+    const r = el.querySelector('[data-act="reply"]');
+    if (r) r.onclick = (e) => { e.stopPropagation(); setRef(S.tasks.find((x) => x.id === id)); };
   });
+}
+
+// Vom Eintrag direkt in sein Projekt (bzw. seinen Bereich) springen; "‹" führt zurück, woher man kam
+function goTo(t) {
+  if (!t) return;
+  const p = projOf(t.project_id), areaId = p ? p.area_id : t.area_id;
+  if (!areaOf(areaId)) return;
+  stopSpeaking(); clearRef();
+  const from = S.view === "bereiche" ? null : S.view;
+  S.stack = [{ type: "area", id: areaId }];
+  if (p) S.stack.push({ type: "project", id: p.id });
+  S.from = from; S.fromDepth = S.stack.length;
+  S.view = "bereiche"; S.showDone = false; S.agentOpen = false;
+  render(); window.scrollTo(0, 0);
+}
+
+// Antwort auf einen Eintrag: Zuruf geht mit Bezug an Clara, sie trägt es im Projekt ein
+const ICON_REPLY = SVG('<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>');
+function refLabel(t) {
+  const p = projOf(t.project_id), a = areaOf(p ? p.area_id : t.area_id);
+  return [p ? p.name : a ? a.name : "", t.title].filter(Boolean).join(" › ");
+}
+function setRef(t) {
+  if (!t) return;
+  if (S.ref && S.ref.task_id === t.id) return clearRef();
+  const p = projOf(t.project_id);
+  S.ref = { task_id: t.id, project_id: p ? p.id : null, area_id: p ? p.area_id : t.area_id || null, label: refLabel(t) };
+  showRef();
+  const cap = $("#cap"); cap.focus();
+  document.querySelectorAll(".task .rep").forEach((b) => b.classList.toggle("on", b.closest(".task").dataset.id === t.id));
+}
+function clearRef() {
+  if (!S.ref) return;
+  S.ref = null; showRef();
+  document.querySelectorAll(".task .rep.on").forEach((b) => b.classList.remove("on"));
+}
+function showRef() {
+  const c = $("#refchip"); if (!c) return;
+  c.classList.toggle("hidden", !S.ref);
+  if (S.ref) c.querySelector("span").textContent = "Zu: " + S.ref.label;
+  updatePlaceholder();
+}
+function updatePlaceholder() {
+  $("#cap").placeholder = inChat() ? (S.agent === "zukunft" ? "Journal-Eintrag …" : `Nachricht an ${agentName(S.agent)} …`)
+    : S.ref ? `Stand, Ergebnis, nächster Schritt … ${agentName("assistenz")} trägt es ein` : "Zuruf an die Zentrale …";
 }
 
 function setTitle(s) { $("#title").textContent = s; }
@@ -635,11 +697,12 @@ function viewDesk(m) {
   const active = o.filter((x) => x.status === "in_arbeit" && (!x.due_date || x.due_date > t));
   const doneToday = S.tasks.filter((x) => x.status === "erledigt" && x.done_at && iso(new Date(x.done_at)) === t);
   let h = `<div class="today-cta"><span>Tag mit ${esc(agentName("assistenz"))} besprechen</span><button class="link-btn" id="to-brief" style="padding:0">Morgenbriefing</button></div>`;
-  h += section("Überfällig", over, {}, "over") + section("Heute", now) + section("In Arbeit", active);
+  const R = { reply: true };
+  h += section("Überfällig", over, R, "over") + section("Heute", now, R) + section("In Arbeit", active, R);
   if (!over.length && !now.length && !active.length) h += `<div class="empty">Für heute ist nichts fällig.</div>`;
   let week = "";
-  for (let i = 1; i <= 7; i++) { const d = addDays(t, i); week += section(dayHeading(d), o.filter((x) => x.due_date === d && !(x.status === "in_arbeit"))); }
-  h += week + section("Später", o.filter((x) => x.due_date && x.due_date > end)) + section("Heute erledigt", doneToday);
+  for (let i = 1; i <= 7; i++) { const d = addDays(t, i); week += section(dayHeading(d), o.filter((x) => x.due_date === d && !(x.status === "in_arbeit")), R); }
+  h += week + section("Später", o.filter((x) => x.due_date && x.due_date > end), R) + section("Heute erledigt", doneToday);
   m.innerHTML = h;
   $("#to-brief").onclick = () => startAgent("assistenz", AGENTS.assistenz.quick[0][1]);
 }
@@ -1362,6 +1425,9 @@ function openSheet(t) {
       <div class="f"><label>Status</label><select id="e-status">${Object.entries(STATUS).map(([k, l]) => `<option value="${k}" ${k === t.status ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       <div class="f"><label>Person</label><input id="e-person" value="${esc(t.person)}" placeholder="wer wartet / auf wen"></div>
     </div>
+    ${!isNew && (t.project_id || t.area_id) ? `<div class="btns" style="justify-content:flex-start;flex-wrap:wrap;margin-top:4px">
+      <button class="btn" id="e-goto">${t.project_id ? "Zum Projekt" : "Zum Bereich"}</button>
+      ${t.status !== "erledigt" ? `<button class="btn" id="e-ref">Dazu an ${esc(agentName("assistenz"))}</button>` : ""}</div>` : ""}
     <div class="btns">
       ${isNew ? "<span></span>" : `<button class="btn danger" id="e-del">Löschen</button>`}
       <span></span>
@@ -1383,6 +1449,8 @@ function openSheet(t) {
     if (isNew) await insertTask(row); else await saveTask(t.id, row);
     scheduleReload();
   };
+  const eg = $("#e-goto"); if (eg) eg.onclick = () => { close(); goTo(t); };
+  const er = $("#e-ref"); if (er) er.onclick = () => { close(); setRef(t); };
   const del = $("#e-del");
   if (del) del.onclick = async () => {
     if (!confirm("Aufgabe endgültig löschen?")) return;
@@ -1428,6 +1496,7 @@ function setupCapture() {
   document.addEventListener("mousedown", closeKb);
   $("#vstart").onclick = () => openVoice(S.agent);
   $("#add").onclick = () => openSheet(null);
+  $("#refchip button").onclick = clearRef;
   $("#menu").onclick = openMenu;
   setupMic();
 }
@@ -1456,22 +1525,26 @@ function hideReply() { clearTimeout(showReply.t); $("#reply").classList.add("hid
 async function askAgent(text) {
   if (inChat()) return askPersona(text);
   busy = true; $("#send").disabled = true;
+  const ref = S.ref; clearRef();
   const r = $("#reply");
   clearTimeout(showReply.t);
   r.classList.remove("hidden");
   r.innerHTML = `<div class="rc-head"><span class="rc-ic"><span class="spin" style="margin:0"></span></span>
-    <div class="rc-main"><b>${esc(agentName("assistenz"))} kümmert sich darum</b><div class="rc-text">${esc(text)}</div></div></div>`;
+    <div class="rc-main"><b>${esc(agentName("assistenz"))} kümmert sich darum</b><div class="rc-text">${ref ? esc("Zu " + ref.label + ": ") : ""}${esc(text)}</div></div></div>`;
   try {
-    const { data, error } = await sb.functions.invoke("agent", { body: { agent: "assistenz", message: text } });
+    const body = { agent: "assistenz", message: text };
+    if (ref) body.context = { task_id: ref.task_id, project_id: ref.project_id, area_id: ref.area_id };
+    const { data, error } = await sb.functions.invoke("agent", { body });
     if (error || data?.error) throw new Error(data?.error || (await errText(error)));
     showReply(data);
     loadOverview().then(() => { if (S.view === "empfang") render(); });
     scheduleReload();
   } catch (e) {
     // Nichts geht verloren: Zuruf landet unverändert im Eingang
-    await insertTask({ title: text.slice(0, 200), notes: text.length > 200 ? text : null });
+    await insertTask({ title: text.slice(0, 200), notes: ref ? `Zu: ${ref.label}${text.length > 200 ? "\n\n" + text : ""}` : text.length > 200 ? text : null,
+      project_id: ref?.project_id || null, area_id: ref?.area_id || null });
     r.innerHTML = `<div class="rc-head"><span class="rc-ic">${ICON_MSG}</span><div class="rc-main"><b>KI nicht erreichbar</b>
-      <div class="acts">Dein Zuruf liegt im Postfach (Eingang).</div><div class="rc-text">${esc(e.message || e)}</div></div>
+      <div class="acts">${ref ? `Dein Zuruf liegt als Aufgabe in ${esc(ref.label.split(" › ")[0])}.` : "Dein Zuruf liegt im Postfach (Eingang)."}</div><div class="rc-text">${esc(e.message || e)}</div></div>
       <button class="x" aria-label="Schließen">✕</button></div>`;
     r.querySelector(".x").onclick = hideReply;
   } finally {
