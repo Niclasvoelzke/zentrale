@@ -320,7 +320,7 @@ details.depot .pos small{color:var(--muted);display:block}
 // ============================================================
 // Grundlagen
 // ============================================================
-const VERSION = "18";
+const VERSION = "19";
 const STATUS = {
   offen: "Offen", in_arbeit: "In Arbeit", ich_warte: "Ich warte", wartet_auf_mich: "Wartet auf mich", erledigt: "Erledigt"
 };
@@ -621,7 +621,8 @@ function setRef(t) {
   if (!t) return;
   if (S.ref && S.ref.task_id === t.id) return clearRef();
   const p = projOf(t.project_id);
-  S.ref = { task_id: t.id, project_id: p ? p.id : null, area_id: p ? p.area_id : t.area_id || null, label: refLabel(t) };
+  const a = areaOf(p ? p.area_id : t.area_id);
+  S.ref = { task_id: t.id, project_id: p ? p.id : null, area_id: p ? p.area_id : t.area_id || null, label: refLabel(t), where: p ? p.name : a ? a.name : "" };
   showRef();
   const cap = $("#cap"); cap.focus();
   document.querySelectorAll(".task .rep").forEach((b) => b.classList.toggle("on", b.closest(".task").dataset.id === t.id));
@@ -714,9 +715,9 @@ function viewPost(m) {
   const inbox = o.filter((x) => !x.area_id && !x.project_id);
   const mine = o.filter((x) => x.status === "wartet_auf_mich");
   const theirs = o.filter((x) => x.status === "ich_warte");
-  let h = section("Eingang · noch nicht einsortiert", inbox, { hideWhere: true });
+  let h = section("Eingang · noch nicht einsortiert", inbox, { hideWhere: true, reply: true });
   if (inbox.length) h += `<div class="toolbar"><button class="link-btn" id="sort-ai">Von der KI einsortieren lassen</button></div>`;
-  h += section("Jemand wartet auf mich", mine) + section("Ich warte auf jemanden", theirs);
+  h += section("Jemand wartet auf mich", mine, { reply: true }) + section("Ich warte auf jemanden", theirs, { reply: true });
   m.innerHTML = h || `<div class="empty">Alles sortiert. Niemand wartet, und du wartest auf niemanden.</div>`;
   const b = $("#sort-ai");
   if (b) b.onclick = () => askAgent("Sortiere alle Aufgaben im Eingang in passende Lebensbereiche und Projekte ein, wo die Zuordnung eindeutig ist. Unklare bleiben im Eingang.");
@@ -1544,7 +1545,7 @@ async function askAgent(text) {
     await insertTask({ title: text.slice(0, 200), notes: ref ? `Zu: ${ref.label}${text.length > 200 ? "\n\n" + text : ""}` : text.length > 200 ? text : null,
       project_id: ref?.project_id || null, area_id: ref?.area_id || null });
     r.innerHTML = `<div class="rc-head"><span class="rc-ic">${ICON_MSG}</span><div class="rc-main"><b>KI nicht erreichbar</b>
-      <div class="acts">${ref ? `Dein Zuruf liegt als Aufgabe in ${esc(ref.label.split(" › ")[0])}.` : "Dein Zuruf liegt im Postfach (Eingang)."}</div><div class="rc-text">${esc(e.message || e)}</div></div>
+      <div class="acts">${ref && ref.where ? `Dein Zuruf liegt als Aufgabe in ${esc(ref.where)}.` : "Dein Zuruf liegt im Postfach (Eingang)."}</div><div class="rc-text">${esc(e.message || e)}</div></div>
       <button class="x" aria-label="Schließen">✕</button></div>`;
     r.querySelector(".x").onclick = hideReply;
   } finally {
