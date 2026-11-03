@@ -206,6 +206,33 @@ details.depot .pos small{color:var(--muted);display:block}
 .pill.talk svg{width:15px;height:15px}
 .tile .vbtn{margin:0}
 .pill.on{border-color:var(--text);color:var(--text);font-weight:600}
+/* Nachkalkulation */
+.av svg{width:19px;height:19px}
+.naka-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 4px}
+.naka-sum div{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px}
+.naka-sum b{display:block;font-size:18px;font-weight:700}
+.naka-sum small{display:block;font-size:12px;color:var(--muted);margin-top:1px}
+.naka .row{align-items:flex-start}
+.dot{flex:none;width:10px;height:10px;border-radius:50%;margin-top:5px;background:var(--faint)}
+.dot.g{background:#2e8a57}.dot.y{background:#c99a2e}.dot.r{background:var(--danger)}.dot.b{background:var(--accent)}
+.naka .who{flex:1;min-width:0}
+.naka .who b{display:block;font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.naka .who small{display:block;color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.naka .num{flex:none;text-align:right;font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.naka .num small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.num .r{color:var(--danger)} .num .g{color:#2e8a57}
+@media (prefers-color-scheme: dark){.dot.g{background:#5fbf86}.num .g{color:#7cc9a0}}
+.kv{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;font-size:13.5px;font-variant-numeric:tabular-nums}
+.kv th,.kv td{padding:8px 10px;border-top:1px solid var(--line);text-align:right;white-space:nowrap}
+.kv tr:first-child th,.kv tr:first-child td{border-top:0}
+.kv th{font-weight:600;color:var(--muted);font-size:12px}
+.kv td:first-child,.kv th:first-child{text-align:left;color:var(--muted);white-space:normal}
+.kv td.r{color:var(--danger)} .kv td.g{color:#2e8a57}
+.naka-head h2{font-size:18px;margin:14px 0 2px;line-height:1.3}
+.naka-head .d{color:var(--muted);font-size:13.5px}
+.hint{padding:9px 12px;border-top:1px solid var(--line);font-size:13.5px}
+.hint:first-child{border-top:0}
+.cta-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0 0;padding:11px 12px;background:var(--accent-soft);color:var(--accent);border-radius:var(--radius);font-size:14px;font-weight:600;width:100%;text-align:left}
 .today-cta{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:var(--radius);font-size:14px;color:var(--muted)}
 
 .round.listen{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -537,6 +564,10 @@ function goBack() {
     S.agentOpen = false;
     if (!ADVISORS.includes(S.agent)) S.view = "empfang";      // Büro und Tagebuch hängen direkt am Empfang
     loadOverview().then(render);
+  } else if (S.view === "naka" && S.nakaSel) { S.nakaSel = null; render(); window.scrollTo(0, S.nakaScroll || 0); return; }
+  else if (S.view === "naka") {
+    S.view = "agenten";
+    if (S.nakaFrom === "cfo") { S.agent = "cfo"; S.agentOpen = true; loadAgent("cfo").then(render); } else loadOverview().then(render);
   } else if (S.view === "bereiche" && S.from && S.stack.length <= S.fromDepth) { S.view = S.from; S.from = null; S.stack = []; S.showDone = false; }
   else if (S.view === "bereiche" && S.stack.length) { S.stack.pop(); S.showDone = false; }
   else if (S.view === "erledigt" && S.returnTo && S.returnTo !== "erledigt") { S.view = S.returnTo; S.returnTo = null; }
@@ -550,7 +581,7 @@ function render() {
   $("#back").classList.toggle("hidden", S.view === "empfang");
   $("#back").onclick = goBack;
   const m = $("#main");
-  ({ empfang: viewLobby, schreibtisch: viewDesk, postfach: viewPost, bereiche: viewAreas, erledigt: viewDone, agenten: viewAgents }[S.view] || viewLobby)(m);
+  ({ empfang: viewLobby, schreibtisch: viewDesk, postfach: viewPost, bereiche: viewAreas, erledigt: viewDone, agenten: viewAgents, naka: viewNaka }[S.view] || viewLobby)(m);
   bindTaskRows(m);
 }
 
@@ -921,7 +952,11 @@ function viewAgentList(m) {
       ${last ? `<span class="cnt">${ago(last.created_at)}</span>` : ""}${hasSR() ? `<button class="vbtn" data-voice="${k}" aria-label="Sprechen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg></button>` : `<span class="chev">›</span>`}</div>`;
   };
   m.innerHTML = `<div class="agent-intro" style="margin-top:14px">Deine Berater für die großen Themen. Antippen öffnet das Gespräch.</div>
-    <div class="list agents">${ADVISORS.map(row).join("")}</div>`;
+    <div class="list agents">${ADVISORS.map(row).join("")}</div>
+    <div class="section" style="margin-top:22px"><span>Auswertungen</span></div>
+    <div class="list agents"><div class="row" id="row-naka"><span class="av">${SVG('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>')}</span>
+      <span class="who"><b>Nachkalkulation</b><small>Soll-Ist je Baustelle aus Hero</small></span><span class="chev">›</span></div></div>`;
+  $("#row-naka").onclick = () => openNaka("agenten");
   m.querySelectorAll("[data-agent]").forEach((r) => r.onclick = () => startAgent(r.dataset.agent));
   m.querySelectorAll("[data-voice]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); openVoice(b.dataset.voice); });
 }
@@ -943,6 +978,12 @@ function viewAgents(m) {
         <span style="text-align:right">${eur(i.value_eur)}<small>Stand ${new Date(i.updated_at).toLocaleDateString("de-DE")}</small></span></div>`).join("")
         : `<div class="pos"><span style="color:var(--muted)">Noch leer. Erzähl dem Investor einfach, was du hast.</span></div>`}
     </details>`;
+  }
+  if (a === "cfo") {
+    if (!S.naka) loadNaka().then(() => { if (inChat() && S.agent === "cfo") render(); });
+    const n = S.naka || [];
+    const fin = n.filter((x) => x.phase === "final").length, lauf = n.filter((x) => x.phase === "zwischenstand").length;
+    h += `<button class="cta-row" id="to-naka"><span>Nachkalkulation${S.naka ? ` · ${fin} fertig, ${lauf} laufend` : ""}</span><span>›</span></button>`;
   }
 
   h += `<div class="pillrow">
@@ -977,6 +1018,7 @@ function viewAgents(m) {
   </div>`;
   m.innerHTML = h;
 
+  if ($("#to-naka")) $("#to-naka").onclick = () => openNaka("cfo");
   m.querySelectorAll("[data-q]").forEach((b) => b.onclick = () => {
     const text = quick[+b.dataset.q][1];
     if (text.endsWith(":")) { const cap = $("#cap"); cap.value = text + " "; cap.focus(); cap.dispatchEvent(new Event("input")); }
@@ -1000,6 +1042,129 @@ function viewAgents(m) {
   };
 }
 
+// ============================================================
+// Nachkalkulation (Soll-Ist je Baustelle, gerechnet aus Hero, nur lesend)
+// ============================================================
+const NAKA_FILTER = [
+  ["final", "Abgeschlossen"], ["zwischenstand", "Laufend"], ["unvollstaendig", "Prüfen"], ["kein_aufmass", "Ohne Aufmaß"],
+];
+async function loadNaka() {
+  const { data, error } = await sb.from("naka_projekte").select("*").order("letzter_tag", { ascending: false });
+  S.naka = error ? [] : data;
+  if (error) toast("Nachkalkulation konnte nicht geladen werden");
+}
+function openNaka(from) {
+  stopSpeaking(); clearRef();
+  S.view = "naka"; S.nakaFrom = from; S.nakaSel = null; S.agentOpen = false;
+  if (!S.nakaFilter) S.nakaFilter = "final";
+  render(); window.scrollTo(0, 0);
+  loadNaka().then(() => { if (S.view === "naka") render(); });
+}
+const pct = (v) => v == null ? "–" : Math.round(Number(v)) + " %";
+const hrs = (v) => v == null ? "–" : Number(v).toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " h";
+const nakaArt = (x) => nakaTitle(x).split(",")[0].trim();
+const nakaOrt = (x) => { const p = nakaTitle(x).split(","); return p.length > 2 ? p[p.length - 1].replace(/\d{5}/, "").trim() : ""; };
+const nakaTitle = (x) => String(x.name || "").replace(/^[A-ZÄÖÜ]+-\d+\s*\|\s*/, "") || x.project_nr || "Projekt";
+// Ampel: grün im Soll, gelb knapp drüber, rot deutlich drüber; blau = läuft noch, grau = Daten fehlen
+function nakaAmpel(x) {
+  if (x.phase === "zwischenstand") return "b";
+  if (x.phase !== "final") return "";
+  const q = x.ergebnis?.stunden_quote, gd = x.ergebnis?.gewinn_diff;
+  if ((q != null && q > 115) || (gd != null && gd < -500)) return "r";
+  if ((q != null && q > 100) || (gd != null && gd < 0)) return "y";
+  return "g";
+}
+function viewNaka(m) {
+  if (S.nakaSel) return viewNakaDetail(m);
+  setTitle("Nachkalkulation");
+  if (!S.naka) { m.innerHTML = `<div class="empty"><span class="spin"></span>Lade …</div>`; return; }
+  const all = S.naka;
+  const fin = all.filter((x) => x.phase === "final");
+  // Stunden gesamt Ist zu Soll (gewichtet, damit kleine Ausreißer nicht verzerren)
+  const mitStd = fin.filter((x) => x.soll?.stunden > 0 && x.ist?.stunden != null);
+  const sollStd = mitStd.reduce((a, x) => a + Number(x.soll.stunden), 0), istStd = mitStd.reduce((a, x) => a + Number(x.ist.stunden), 0);
+  const avgQ = sollStd ? (istStd / sollStd) * 100 : null;
+  const gdSum = fin.reduce((s, x) => s + (Number(x.ergebnis?.gewinn_diff) || 0), 0);
+  const rot = fin.filter((x) => nakaAmpel(x) === "r").length;
+  const f = S.nakaFilter || "final";
+  const items = all.filter((x) => x.phase === f);
+  const chips = NAKA_FILTER.map(([k, l]) => `<button data-f="${k}" class="${k === f ? "on" : ""}">${l} ${all.filter((x) => x.phase === k).length}</button>`).join("");
+  const row = (x, i) => {
+    const e = x.ergebnis || {}, amp = nakaAmpel(x);
+    let num = "";
+    if (x.phase === "final") {
+      const q = e.stunden_quote;
+      num = `<span class="${q > 115 ? "r" : q != null && q <= 100 ? "g" : ""}">${q != null ? pct(q) + " Std." : "–"}</span><small>Marge ${pct(e.gewinn_marge)}</small>`;
+    } else if (x.phase === "zwischenstand") {
+      num = `${hrs(x.ist?.stunden)}<small>von ${hrs(x.soll?.stunden)}</small>`;
+    } else {
+      num = `<small>${x.montagetage} Tage</small>`;
+    }
+    const sub = x.phase === "unvollstaendig" || x.phase === "kein_aufmass"
+      ? esc((x.hinweise || [])[0] || (x.phase === "kein_aufmass" ? "Kein Aufmaß mit Stunden" : ""))
+      : esc([nakaArt(x), nakaOrt(x)].filter(Boolean).join(" · "));
+    return `<div class="row" data-i="${i}"><span class="dot ${amp}"></span>
+      <span class="who"><b>${esc(x.project_nr)} · ${esc(String(x.kunde || "").trim() || nakaTitle(x))}</b><small>${sub}</small></span>
+      <span class="num">${num}</span></div>`;
+  };
+  m.innerHTML = `
+    <div class="naka-sum">
+      <div><b>${fin.length}</b><small>abgeschlossen</small></div>
+      <div><b>${avgQ == null ? "–" : pct(avgQ)}</b><small>Stunden zum Soll</small></div>
+      <div><b style="color:${gdSum < 0 ? "var(--danger)" : "inherit"}">${gdSum >= 0 ? "+" : ""}${eur(gdSum)}</b><small>Gewinn zum Soll</small></div>
+    </div>
+    ${rot ? `<div class="agent-intro">${plural(rot, "Baustelle", "Baustellen")} deutlich über Soll (rot).</div>` : ""}
+    <div class="chips">${chips}</div>
+    ${items.length ? `<div class="list naka">${items.map((x) => row(x, all.indexOf(x))).join("")}</div>` : `<div class="empty">Keine Baustellen in dieser Ansicht.</div>`}
+    <button class="cta-row" id="naka-talk"><span>Mit ${esc(agentName("cfo"))} besprechen</span><span>›</span></button>
+    <div class="agent-intro" style="margin-top:10px">Grundlage: Baustellen vom Typ „Projekt“ mit mindestens 2 Umsetzungstagen in der Plantafel. Soll = Angebot bzw. AB, Ist = Aufmaß. Grün im Soll, gelb knapp drüber, rot über 115 % der Stunden oder deutlich weniger Gewinn.${all[0]?.berechnet_am ? ` Stand ${ago(all.reduce((a, x) => (x.berechnet_am || "") > a ? x.berechnet_am : a, ""))}.` : ""}</div>`;
+  m.querySelectorAll("[data-f]").forEach((b) => b.onclick = () => { S.nakaFilter = b.dataset.f; render(); });
+  m.querySelectorAll(".naka [data-i]").forEach((r) => r.onclick = () => { S.nakaScroll = window.scrollY; S.nakaSel = all[+r.dataset.i].project_id; render(); window.scrollTo(0, 0); });
+  $("#naka-talk").onclick = () => startAgent("cfo", "Lass uns die Nachkalkulation durchgehen: Wo laufen wir aus dem Ruder, welche Muster siehst du, und was sollten wir bei der Kalkulation ändern?");
+}
+function viewNakaDetail(m) {
+  const x = (S.naka || []).find((y) => y.project_id === S.nakaSel);
+  if (!x) { S.nakaSel = null; return viewNaka(m); }
+  setTitle(x.project_nr);
+  const s = x.soll || {}, i = x.ist || {}, e = x.ergebnis || {};
+  const has = (v) => v != null && v !== "";
+  const diff = (a, b, inv) => {
+    if (!has(a) || !has(b)) return `<td></td>`;
+    const d = Number(b) - Number(a);
+    const bad = inv ? d > 0.5 : d < -0.5;
+    return `<td class="${Math.abs(d) < 0.5 ? "" : bad ? "r" : "g"}">${d > 0 ? "+" : ""}${d.toLocaleString("de-DE", { maximumFractionDigits: 0 })}</td>`;
+  };
+  const tr = (label, a, b, fmt, inv) => `<tr><td>${label}</td><td>${has(a) ? fmt(a) : "–"}</td><td>${has(b) ? fmt(b) : "–"}</td>${diff(a, b, inv)}</tr>`;
+  const table = x.soll || x.ist ? `<div class="section"><span>Soll – Ist</span><span>${esc([s.nr, i.nr].filter(Boolean).join(" → "))}</span></div>
+    <table class="kv">
+      <tr><th></th><th>Soll</th><th>Ist</th><th>Diff.</th></tr>
+      ${tr("Umsatz", s.umsatz, i.umsatz, eur)}
+      ${tr("Material (EK)", s.material_ek, i.material_ek, eur, true)}
+      ${tr("Stunden", s.stunden, i.stunden, hrs, true)}
+      ${tr("Lohnkosten", s.lohnkosten, i.lohnkosten, eur, true)}
+      ${tr("Gewinn", s.gewinn, i.gewinn, eur)}
+      <tr><td>Marge</td><td>${pct(e.soll_gewinn_marge)}</td><td>${pct(e.gewinn_marge)}</td><td></td></tr>
+    </table>` : `<div class="empty">Noch keine Zahlen: ${esc((x.hinweise || [])[0] || "kein Angebot und kein Aufmaß gefunden")}.</div>`;
+  const stdBox = x.ist ? `<div class="section"><span>Stunden im Aufmaß</span></div>
+    <table class="kv">
+      <tr><td>Monteur</td><td>${hrs(i.std_monteur)}</td></tr>
+      <tr><td>Azubi</td><td>${hrs(i.std_azubi)}</td></tr>
+      <tr><td>Ergebnis zum Verrechnungssatz</td><td>${eur(i.ergebnis_verrechnungssatz)}</td></tr>
+      ${i.abschlaege ? `<tr><td>Abschläge bereits gestellt</td><td>${eur(i.abschlaege)}</td></tr>` : ""}
+    </table>` : "";
+  const hints = (x.hinweise || []).length ? `<div class="section"><span>Hinweise</span></div><div class="list">${x.hinweise.map((t) => `<div class="hint">${esc(t)}</div>`).join("")}</div>` : "";
+  const docs = (x.dokumente || []).filter((d) => d.nr || d.wert);
+  const docList = docs.length ? `<div class="section"><span>Dokumente in Hero</span><span>${docs.length}</span></div>
+    <table class="kv">${docs.map((d) => `<tr><td>${esc(d.typ)} ${esc(d.nr || "(hochgeladen)")}<br><small style="color:var(--faint)">${esc(d.status || "")}${d.stundenpositionen ? " · mit Stunden" : ""}</small></td><td>${eur(d.wert)}</td></tr>`).join("")}</table>` : "";
+  const phase = { final: "Abgeschlossen", zwischenstand: "Zwischenstand – Aufmaß noch nicht fertig", unvollstaendig: "Daten unvollständig", kein_aufmass: "Kein Aufmaß mit Stunden", fehler: "Fehler beim Rechnen" }[x.phase] || x.phase;
+  const zeit = x.erster_tag ? `${new Date(x.erster_tag + "T12:00:00").toLocaleDateString("de-DE")} – ${new Date(x.letzter_tag + "T12:00:00").toLocaleDateString("de-DE")}` : "";
+  m.innerHTML = `<div class="naka-head"><h2><span class="dot ${nakaAmpel(x)}" style="display:inline-block;margin:0 8px 2px 0;vertical-align:middle"></span>${esc(nakaTitle(x))}</h2>
+      <div class="d">${esc(phase)}${x.status && x.status !== phase ? " · Hero: " + esc(x.status) : ""}</div>
+      <div class="d">${x.montagetage} Montagetage${zeit ? " · " + zeit : ""}</div></div>
+    ${table}${stdBox}${hints}${docList}
+    <button class="cta-row" id="naka-talk1"><span>Mit ${esc(agentName("cfo"))} besprechen</span><span>›</span></button>`;
+  $("#naka-talk1").onclick = () => startAgent("cfo", `Lass uns die Nachkalkulation von ${x.project_nr} (${nakaTitle(x)}) besprechen. Was fällt dir auf, und was lernen wir daraus für die nächste Kalkulation?`);
+}
 
 // ============================================================
 // Vorlage je Agent (Text, Foto oder PDF)
