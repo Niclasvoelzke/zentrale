@@ -1084,6 +1084,7 @@ function nakaMatch(x, q) {
 function nakaAmpel(x) {
   if (x.phase === "zwischenstand") return "b";
   if (x.phase !== "final") return "";
+  if (!x.soll) return "";   // ohne Soll keine Bewertung
   if (nakaNachweis(x)) {
     // Nach Nachweis abgerechnet: Mehrstunden wurden berechnet, es zählt die Marge
     const m = x.ergebnis?.gewinn_marge, sm = x.ergebnis?.soll_gewinn_marge;
