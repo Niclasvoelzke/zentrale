@@ -1188,6 +1188,7 @@ function viewNakaDetail(m) {
       <tr><th></th><th>Soll</th><th>Ist</th><th>Diff.</th></tr>
       ${tr("Umsatz", s.umsatz, i.umsatz, eur)}
       ${tr("Material (EK)", s.material_ek, i.material_ek, eur, true)}
+      ${s.stunden_nachtrag > 0 ? `<tr><td colspan="4" style="text-align:left;color:var(--muted);font-size:12.5px;padding-top:4px;padding-bottom:4px">Soll-Stunden: ${hrs(s.stunden_angebot)} laut ${esc(s.nr || "Angebot")} + ${hrs(s.stunden_nachtrag)} Nachtrag aus dem Aufmaß</td></tr>` : ""}
       ${nakaNachweis(x) ? `<tr><td>Stunden<br><small style="color:var(--faint)">nach Nachweis berechnet</small></td><td>${hrs(s.stunden)}</td><td>${hrs(i.stunden)}</td><td>${has(s.stunden) && has(i.stunden) ? (i.stunden - s.stunden > 0 ? "+" : "") + Math.round(i.stunden - s.stunden) : ""}</td></tr>` : tr("Stunden", s.stunden, i.stunden, hrs, true)}
       ${tr("Lohnkosten", s.lohnkosten, i.lohnkosten, eur, true)}
       ${tr("Gewinn", s.gewinn, i.gewinn, eur)}
@@ -1209,7 +1210,7 @@ function viewNakaDetail(m) {
   const korrBits = k ? [k.abrechnung === "nachweis" ? "Abrechnung nach Nachweis" : k.abrechnung === "pauschal" ? "Abrechnung pauschal" : "",
     k.soll_nr ? `Soll festgelegt: ${k.soll_nr}` : "", k.ist_nr ? `Aufmaß festgelegt: ${k.ist_nr}` : "", k.ausschliessen ? "Aus der Auswertung genommen" : ""].filter(Boolean) : [];
   const korr = `<div class="section"><span>Bewertung</span><button class="link-btn" id="naka-edit" style="padding:0;font-size:13px;text-transform:none;letter-spacing:0">Anpassen</button></div>
-    <div class="list"><div class="hint">${korrBits.length ? esc(korrBits.join(" · ")) : "Automatisch: pauschal, Soll und Aufmaß von der Zentrale gewählt"}${k?.notiz ? `<br><small style="color:var(--muted)">${esc(k.notiz)}</small>` : ""}</div></div>`;
+    <div class="list"><div class="hint">${korrBits.length ? esc(korrBits.join(" · ")) : `Automatisch: ${x.ergebnis?.abrechnung === "nachweis" ? "nach Nachweis (Stunden im Angebot einzeln)" : "pauschal"}, Soll und Aufmaß von der Zentrale gewählt`}${k?.notiz ? `<br><small style="color:var(--muted)">${esc(k.notiz)}</small>` : ""}</div></div>`;
   const zeit = x.erster_tag ? `${new Date(x.erster_tag + "T12:00:00").toLocaleDateString("de-DE")} – ${new Date(x.letzter_tag + "T12:00:00").toLocaleDateString("de-DE")}` : "";
   m.innerHTML = `<div class="naka-head"><h2><span class="dot ${nakaAmpel(x)}" style="display:inline-block;margin:0 8px 2px 0;vertical-align:middle"></span>${esc(nakaTitle(x))}</h2>
       <div class="d">${esc(phase)}${x.status && x.status !== phase ? " · Hero: " + esc(x.status) : ""}</div>
@@ -1231,8 +1232,9 @@ function openNakaEdit(x) {
     <div class="sheet-head"><button id="k-cancel">Abbrechen</button><h2>${esc(x.project_nr)} anpassen</h2><button id="k-save" class="strong">Sichern</button></div>
     <p style="color:var(--muted);font-size:13.5px;margin:0 0 10px">Ändert nur die Bewertung in der Zentrale. In Hero bleibt alles, wie es ist.</p>
     <div class="f"><label>Abrechnung</label><select id="k-abr">
-      <option value="">Pauschal (Standard)</option>
-      <option value="nachweis" ${k.abrechnung === "nachweis" ? "selected" : ""}>Nach Nachweis (Mehrstunden berechnet)</option></select></div>
+      <option value="">Automatisch (Stunden im Angebot = Nachweis)</option>
+      <option value="pauschal" ${k.abrechnung === "pauschal" ? "selected" : ""}>Pauschal</option>
+      <option value="nachweis" ${k.abrechnung === "nachweis" ? "selected" : ""}>Nach Nachweis</option></select></div>
     <div class="f"><label>Soll (Angebot oder AB)</label><select id="k-soll">${opt(docs, k.soll_nr)}</select></div>
     <div class="f"><label>Ist (Aufmaß)</label><select id="k-ist">${opt(docs.filter((d) => d.typ === "AB"), k.ist_nr)}</select></div>
     <label style="display:flex;gap:10px;align-items:center;margin:4px 0 12px;font-size:14.5px"><input type="checkbox" id="k-aus" ${k.ausschliessen ? "checked" : ""} style="width:20px;height:20px"> Aus der Auswertung nehmen</label>
