@@ -208,6 +208,11 @@ details.depot .pos small{color:var(--muted);display:block}
 .pill.on{border-color:var(--text);color:var(--text);font-weight:600}
 /* Nachkalkulation */
 .av svg{width:19px;height:19px}
+.naka-search{position:relative;margin:12px 0 0}
+.naka-search input{width:100%;padding:10px 36px 10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);outline:none;-webkit-appearance:none;appearance:none}
+.naka-search input:focus{border-color:var(--accent)}
+.naka-search input::-webkit-search-cancel-button{display:none}
+.naka-search button{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:32px;height:32px;color:var(--faint)}
 .naka-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 4px}
 .naka-sum div{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px}
 .naka-sum b{display:block;font-size:18px;font-weight:700}
@@ -1046,8 +1051,11 @@ function viewAgents(m) {
 // Nachkalkulation (Soll-Ist je Baustelle, gerechnet aus Hero, nur lesend)
 // ============================================================
 const NAKA_FILTER = [
-  ["final", "Abgeschlossen"], ["zwischenstand", "Laufend"], ["unvollstaendig", "Prüfen"], ["kein_aufmass", "Ohne Aufmaß"],
+  ["final", "Abgeschlossen"], ["zwischenstand", "Laufend"], ["unvollstaendig", "Prüfen"], ["kein_aufmass", "Ohne Aufmaß"], ["archiv", "Archiv"],
 ];
+const NAKA_PHASE = { final: "Abgeschlossen", zwischenstand: "Laufend", unvollstaendig: "Prüfen", kein_aufmass: "Ohne Aufmaß", archiv: "Archiv", fehler: "Fehler" };
+// Abgeschlossene Baustellen, deren letzter Montagetag älter als sechs Monate ist, wandern ins Archiv
+const nakaKey = (x) => x.phase === "final" && x.letzter_tag && x.letzter_tag < addDays(today(), -183) ? "archiv" : x.phase;
 async function loadNaka() {
   const { data, error } = await sb.from("naka_projekte").select("*").order("letzter_tag", { ascending: false });
   S.naka = error ? [] : data;
@@ -1058,13 +1066,19 @@ function openNaka(from) {
   S.view = "naka"; S.nakaFrom = from; S.nakaSel = null; S.agentOpen = false;
   if (!S.nakaFilter) S.nakaFilter = "final";
   render(); window.scrollTo(0, 0);
-  loadNaka().then(() => { if (S.view === "naka") render(); });
+  loadNaka().then(() => { if (S.view === "naka" && !S.nakaSel) { const q = $("#naka-q"), had = q && document.activeElement === q; render(); if (had) $("#naka-q").focus(); } });
 }
 const pct = (v) => v == null ? "–" : Math.round(Number(v)) + " %";
 const hrs = (v) => v == null ? "–" : Number(v).toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " h";
 const nakaArt = (x) => nakaTitle(x).split(",")[0].trim();
 const nakaOrt = (x) => { const p = nakaTitle(x).split(","); return p.length > 2 ? p[p.length - 1].replace(/\d{5}/, "").trim() : ""; };
 const nakaTitle = (x) => String(x.name || "").replace(/^[A-ZÄÖÜ]+-\d+\s*\|\s*/, "") || x.project_nr || "Projekt";
+const norm = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9äöüß]+/g, "");
+function nakaMatch(x, q) {
+  const words = String(q).toLowerCase().split(/\s+/).map(norm).filter(Boolean);
+  const hay = norm([x.project_nr, x.name, x.kunde, x.status].join(" "));
+  return words.every((w) => hay.includes(w));
+}
 // Ampel: grün im Soll, gelb knapp drüber, rot deutlich drüber; blau = läuft noch, grau = Daten fehlen
 function nakaAmpel(x) {
   if (x.phase === "zwischenstand") return "b";
@@ -1074,12 +1088,44 @@ function nakaAmpel(x) {
   if ((q != null && q > 100) || (gd != null && gd < 0)) return "y";
   return "g";
 }
+function nakaRow(x, i, withPhase) {
+  const e = x.ergebnis || {}, amp = nakaAmpel(x);
+  let num = "";
+  if (x.phase === "final") {
+    const q = e.stunden_quote;
+    num = `<span class="${q > 115 ? "r" : q != null && q <= 100 ? "g" : ""}">${q != null ? pct(q) + " Std." : "–"}</span><small>Marge ${pct(e.gewinn_marge)}</small>`;
+  } else if (x.phase === "zwischenstand") {
+    num = `${hrs(x.ist?.stunden)}<small>von ${hrs(x.soll?.stunden)}</small>`;
+  } else {
+    num = `<small>${x.montagetage} Tage</small>`;
+  }
+  const base = x.phase === "unvollstaendig" || x.phase === "kein_aufmass"
+    ? (x.hinweise || [])[0] || (x.phase === "kein_aufmass" ? "Kein Aufmaß mit Stunden" : "")
+    : [nakaArt(x), nakaOrt(x)].filter(Boolean).join(" · ");
+  const sub = withPhase ? [NAKA_PHASE[nakaKey(x)], base].filter(Boolean).join(" · ") : base;
+  return `<div class="row" data-i="${i}"><span class="dot ${amp}"></span>
+    <span class="who"><b>${esc(x.project_nr)} · ${esc(String(x.kunde || "").trim() || nakaTitle(x))}</b><small>${esc(sub)}</small></span>
+    <span class="num">${num}</span></div>`;
+}
+function nakaList(all) {
+  const q = (S.nakaQ || "").trim();
+  const items = q ? all.filter((x) => nakaMatch(x, q)) : all.filter((x) => nakaKey(x) === (S.nakaFilter || "final"));
+  const head = q ? `<div class="section"><span>${plural(items.length, "Treffer", "Treffer")}</span><span>alle Bereiche inkl. Archiv</span></div>` : "";
+  return head + (items.length ? `<div class="list naka">${items.map((x) => nakaRow(x, all.indexOf(x), !!q)).join("")}</div>`
+    : `<div class="empty">${q ? "Nichts gefunden. Projektnummer, Kunde, Ort oder Stichwort aus dem Hero-Projektnamen eingeben." : "Keine Baustellen in dieser Ansicht."}</div>`);
+}
+function bindNakaList(m, all) {
+  m.querySelectorAll(".naka [data-i]").forEach((r) => r.onclick = () => {
+    $("#naka-q")?.blur();
+    S.nakaScroll = window.scrollY; S.nakaSel = all[+r.dataset.i].project_id; render(); window.scrollTo(0, 0);
+  });
+}
 function viewNaka(m) {
   if (S.nakaSel) return viewNakaDetail(m);
   setTitle("Nachkalkulation");
   if (!S.naka) { m.innerHTML = `<div class="empty"><span class="spin"></span>Lade …</div>`; return; }
   const all = S.naka;
-  const fin = all.filter((x) => x.phase === "final");
+  const fin = all.filter((x) => nakaKey(x) === "final");
   // Stunden gesamt Ist zu Soll (gewichtet, damit kleine Ausreißer nicht verzerren)
   const mitStd = fin.filter((x) => x.soll?.stunden > 0 && x.ist?.stunden != null);
   const sollStd = mitStd.reduce((a, x) => a + Number(x.soll.stunden), 0), istStd = mitStd.reduce((a, x) => a + Number(x.ist.stunden), 0);
@@ -1087,39 +1133,30 @@ function viewNaka(m) {
   const gdSum = fin.reduce((s, x) => s + (Number(x.ergebnis?.gewinn_diff) || 0), 0);
   const rot = fin.filter((x) => nakaAmpel(x) === "r").length;
   const f = S.nakaFilter || "final";
-  const items = all.filter((x) => x.phase === f);
-  const chips = NAKA_FILTER.map(([k, l]) => `<button data-f="${k}" class="${k === f ? "on" : ""}">${l} ${all.filter((x) => x.phase === k).length}</button>`).join("");
-  const row = (x, i) => {
-    const e = x.ergebnis || {}, amp = nakaAmpel(x);
-    let num = "";
-    if (x.phase === "final") {
-      const q = e.stunden_quote;
-      num = `<span class="${q > 115 ? "r" : q != null && q <= 100 ? "g" : ""}">${q != null ? pct(q) + " Std." : "–"}</span><small>Marge ${pct(e.gewinn_marge)}</small>`;
-    } else if (x.phase === "zwischenstand") {
-      num = `${hrs(x.ist?.stunden)}<small>von ${hrs(x.soll?.stunden)}</small>`;
-    } else {
-      num = `<small>${x.montagetage} Tage</small>`;
-    }
-    const sub = x.phase === "unvollstaendig" || x.phase === "kein_aufmass"
-      ? esc((x.hinweise || [])[0] || (x.phase === "kein_aufmass" ? "Kein Aufmaß mit Stunden" : ""))
-      : esc([nakaArt(x), nakaOrt(x)].filter(Boolean).join(" · "));
-    return `<div class="row" data-i="${i}"><span class="dot ${amp}"></span>
-      <span class="who"><b>${esc(x.project_nr)} · ${esc(String(x.kunde || "").trim() || nakaTitle(x))}</b><small>${sub}</small></span>
-      <span class="num">${num}</span></div>`;
-  };
+  const chips = NAKA_FILTER.map(([k, l]) => `<button data-f="${k}" class="${k === f && !S.nakaQ ? "on" : ""}">${l} ${all.filter((x) => nakaKey(x) === k).length}</button>`).join("");
   m.innerHTML = `
     <div class="naka-sum">
-      <div><b>${fin.length}</b><small>abgeschlossen</small></div>
+      <div><b>${fin.length}</b><small>fertig, 6 Monate</small></div>
       <div><b>${avgQ == null ? "–" : pct(avgQ)}</b><small>Stunden zum Soll</small></div>
       <div><b style="color:${gdSum < 0 ? "var(--danger)" : "inherit"}">${gdSum >= 0 ? "+" : ""}${eur(gdSum)}</b><small>Gewinn zum Soll</small></div>
     </div>
     ${rot ? `<div class="agent-intro">${plural(rot, "Baustelle", "Baustellen")} deutlich über Soll (rot).</div>` : ""}
+    <div class="naka-search"><input id="naka-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Suchen: Nummer, Kunde, Ort …" value="${esc(S.nakaQ || "")}">
+      ${S.nakaQ ? `<button id="naka-qx" aria-label="Suche leeren">✕</button>` : ""}</div>
     <div class="chips">${chips}</div>
-    ${items.length ? `<div class="list naka">${items.map((x) => row(x, all.indexOf(x))).join("")}</div>` : `<div class="empty">Keine Baustellen in dieser Ansicht.</div>`}
+    <div id="naka-list">${nakaList(all)}</div>
     <button class="cta-row" id="naka-talk"><span>Mit ${esc(agentName("cfo"))} besprechen</span><span>›</span></button>
-    <div class="agent-intro" style="margin-top:10px">Grundlage: Baustellen vom Typ „Projekt“ mit mindestens 2 Umsetzungstagen in der Plantafel. Soll = Angebot bzw. AB, Ist = Aufmaß. Grün im Soll, gelb knapp drüber, rot über 115 % der Stunden oder deutlich weniger Gewinn.${all[0]?.berechnet_am ? ` Stand ${ago(all.reduce((a, x) => (x.berechnet_am || "") > a ? x.berechnet_am : a, ""))}.` : ""}</div>`;
-  m.querySelectorAll("[data-f]").forEach((b) => b.onclick = () => { S.nakaFilter = b.dataset.f; render(); });
-  m.querySelectorAll(".naka [data-i]").forEach((r) => r.onclick = () => { S.nakaScroll = window.scrollY; S.nakaSel = all[+r.dataset.i].project_id; render(); window.scrollTo(0, 0); });
+    <div class="agent-intro" style="margin-top:10px">Grundlage: Baustellen vom Typ „Projekt“ mit mindestens 2 Umsetzungstagen in der Plantafel. Soll = Angebot bzw. AB, Ist = Aufmaß. Grün im Soll, gelb knapp drüber, rot über 115 % der Stunden oder deutlich weniger Gewinn. Abgeschlossene Baustellen, deren letzter Montagetag länger als sechs Monate zurückliegt, stehen im Archiv.${all[0]?.berechnet_am ? ` Stand ${ago(all.reduce((a, x) => (x.berechnet_am || "") > a ? x.berechnet_am : a, ""))}.` : ""}</div>`;
+  m.querySelectorAll("[data-f]").forEach((b) => b.onclick = () => { S.nakaFilter = b.dataset.f; S.nakaQ = ""; render(); });
+  const qi = $("#naka-q");
+  qi.oninput = () => {
+    const had = !!S.nakaQ; S.nakaQ = qi.value;
+    if (had !== !!S.nakaQ) { const pos = qi.selectionStart; render(); const n = $("#naka-q"); n.focus(); n.setSelectionRange(pos, pos); return; }
+    $("#naka-list").innerHTML = nakaList(all); bindNakaList(m, all);
+  };
+  qi.onkeydown = (e) => { if (e.key === "Enter") qi.blur(); };
+  if ($("#naka-qx")) $("#naka-qx").onclick = () => { S.nakaQ = ""; render(); };
+  bindNakaList(m, all);
   $("#naka-talk").onclick = () => startAgent("cfo", "Lass uns die Nachkalkulation durchgehen: Wo laufen wir aus dem Ruder, welche Muster siehst du, und was sollten wir bei der Kalkulation ändern?");
 }
 function viewNakaDetail(m) {
