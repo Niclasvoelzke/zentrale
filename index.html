@@ -1051,9 +1051,10 @@ function viewAgents(m) {
 // Nachkalkulation (Soll-Ist je Baustelle, gerechnet aus Hero, nur lesend)
 // ============================================================
 const NAKA_FILTER = [
-  ["final", "Abgeschlossen"], ["zwischenstand", "Laufend"], ["unvollstaendig", "Prüfen"], ["kein_aufmass", "Ohne Aufmaß"], ["archiv", "Archiv"],
+  ["final", "Abgeschlossen"], ["zwischenstand", "Laufend"], ["unvollstaendig", "Prüfen"], ["kein_aufmass", "Ohne Aufmaß"], ["archiv", "Archiv"], ["ausgenommen", "Ausgenommen"],
 ];
-const NAKA_PHASE = { final: "Abgeschlossen", zwischenstand: "Laufend", unvollstaendig: "Prüfen", kein_aufmass: "Ohne Aufmaß", archiv: "Archiv", fehler: "Fehler" };
+const NAKA_PHASE = { final: "Abgeschlossen", zwischenstand: "Laufend", unvollstaendig: "Prüfen", kein_aufmass: "Ohne Aufmaß", archiv: "Archiv", ausgenommen: "Ausgenommen", fehler: "Fehler" };
+const nakaNachweis = (x) => x.ergebnis?.abrechnung === "nachweis" || x.korrektur?.abrechnung === "nachweis";
 // Abgeschlossene Baustellen, deren letzter Montagetag älter als sechs Monate ist, wandern ins Archiv
 const nakaKey = (x) => x.phase === "final" && x.letzter_tag && x.letzter_tag < addDays(today(), -183) ? "archiv" : x.phase;
 async function loadNaka() {
@@ -1083,6 +1084,13 @@ function nakaMatch(x, q) {
 function nakaAmpel(x) {
   if (x.phase === "zwischenstand") return "b";
   if (x.phase !== "final") return "";
+  if (nakaNachweis(x)) {
+    // Nach Nachweis abgerechnet: Mehrstunden wurden berechnet, es zählt die Marge
+    const m = x.ergebnis?.gewinn_marge, sm = x.ergebnis?.soll_gewinn_marge;
+    if (m == null) return "";
+    if (sm == null) return m < 0 ? "r" : "g";
+    return m < sm - 5 ? "r" : m < sm - 1 ? "y" : "g";
+  }
   const q = x.ergebnis?.stunden_quote, gd = x.ergebnis?.gewinn_diff;
   if ((q != null && q > 115) || (gd != null && gd < -500)) return "r";
   if ((q != null && q > 100) || (gd != null && gd < 0)) return "y";
@@ -1091,7 +1099,9 @@ function nakaAmpel(x) {
 function nakaRow(x, i, withPhase) {
   const e = x.ergebnis || {}, amp = nakaAmpel(x);
   let num = "";
-  if (x.phase === "final") {
+  if (x.phase === "final" && nakaNachweis(x)) {
+    num = `<span class="${amp === "r" ? "r" : amp === "g" ? "g" : ""}">Marge ${pct(e.gewinn_marge)}</span><small>Nachweis</small>`;
+  } else if (x.phase === "final") {
     const q = e.stunden_quote;
     num = `<span class="${q > 115 ? "r" : q != null && q <= 100 ? "g" : ""}">${q != null ? pct(q) + " Std." : "–"}</span><small>Marge ${pct(e.gewinn_marge)}</small>`;
   } else if (x.phase === "zwischenstand") {
@@ -1099,7 +1109,8 @@ function nakaRow(x, i, withPhase) {
   } else {
     num = `<small>${x.montagetage} Tage</small>`;
   }
-  const base = x.phase === "unvollstaendig" || x.phase === "kein_aufmass"
+  const base = x.phase === "ausgenommen" ? (x.korrektur?.notiz || "Aus der Auswertung genommen")
+    : x.phase === "unvollstaendig" || x.phase === "kein_aufmass"
     ? (x.hinweise || [])[0] || (x.phase === "kein_aufmass" ? "Kein Aufmaß mit Stunden" : "")
     : [nakaArt(x), nakaOrt(x)].filter(Boolean).join(" · ");
   const sub = withPhase ? [NAKA_PHASE[nakaKey(x)], base].filter(Boolean).join(" · ") : base;
@@ -1127,17 +1138,17 @@ function viewNaka(m) {
   const all = S.naka;
   const fin = all.filter((x) => nakaKey(x) === "final");
   // Stunden gesamt Ist zu Soll (gewichtet, damit kleine Ausreißer nicht verzerren)
-  const mitStd = fin.filter((x) => x.soll?.stunden > 0 && x.ist?.stunden != null);
+  const mitStd = fin.filter((x) => !nakaNachweis(x) && x.soll?.stunden > 0 && x.ist?.stunden != null);
   const sollStd = mitStd.reduce((a, x) => a + Number(x.soll.stunden), 0), istStd = mitStd.reduce((a, x) => a + Number(x.ist.stunden), 0);
   const avgQ = sollStd ? (istStd / sollStd) * 100 : null;
   const gdSum = fin.reduce((s, x) => s + (Number(x.ergebnis?.gewinn_diff) || 0), 0);
   const rot = fin.filter((x) => nakaAmpel(x) === "r").length;
   const f = S.nakaFilter || "final";
-  const chips = NAKA_FILTER.map(([k, l]) => `<button data-f="${k}" class="${k === f && !S.nakaQ ? "on" : ""}">${l} ${all.filter((x) => nakaKey(x) === k).length}</button>`).join("");
+  const chips = NAKA_FILTER.filter(([k]) => k !== "ausgenommen" || all.some((x) => nakaKey(x) === k)).map(([k, l]) => `<button data-f="${k}" class="${k === f && !S.nakaQ ? "on" : ""}">${l} ${all.filter((x) => nakaKey(x) === k).length}</button>`).join("");
   m.innerHTML = `
     <div class="naka-sum">
       <div><b>${fin.length}</b><small>fertig, 6 Monate</small></div>
-      <div><b>${avgQ == null ? "–" : pct(avgQ)}</b><small>Stunden zum Soll</small></div>
+      <div><b>${avgQ == null ? "–" : pct(avgQ)}</b><small>Stunden zum Soll (pauschal)</small></div>
       <div><b style="color:${gdSum < 0 ? "var(--danger)" : "inherit"}">${gdSum >= 0 ? "+" : ""}${eur(gdSum)}</b><small>Gewinn zum Soll</small></div>
     </div>
     ${rot ? `<div class="agent-intro">${plural(rot, "Baustelle", "Baustellen")} deutlich über Soll (rot).</div>` : ""}
@@ -1177,7 +1188,7 @@ function viewNakaDetail(m) {
       <tr><th></th><th>Soll</th><th>Ist</th><th>Diff.</th></tr>
       ${tr("Umsatz", s.umsatz, i.umsatz, eur)}
       ${tr("Material (EK)", s.material_ek, i.material_ek, eur, true)}
-      ${tr("Stunden", s.stunden, i.stunden, hrs, true)}
+      ${nakaNachweis(x) ? `<tr><td>Stunden<br><small style="color:var(--faint)">nach Nachweis berechnet</small></td><td>${hrs(s.stunden)}</td><td>${hrs(i.stunden)}</td><td>${has(s.stunden) && has(i.stunden) ? (i.stunden - s.stunden > 0 ? "+" : "") + Math.round(i.stunden - s.stunden) : ""}</td></tr>` : tr("Stunden", s.stunden, i.stunden, hrs, true)}
       ${tr("Lohnkosten", s.lohnkosten, i.lohnkosten, eur, true)}
       ${tr("Gewinn", s.gewinn, i.gewinn, eur)}
       <tr><td>Marge</td><td>${pct(e.soll_gewinn_marge)}</td><td>${pct(e.gewinn_marge)}</td><td></td></tr>
@@ -1193,14 +1204,63 @@ function viewNakaDetail(m) {
   const docs = (x.dokumente || []).filter((d) => d.nr || d.wert);
   const docList = docs.length ? `<div class="section"><span>Dokumente in Hero</span><span>${docs.length}</span></div>
     <table class="kv">${docs.map((d) => `<tr><td>${esc(d.typ)} ${esc(d.nr || "(hochgeladen)")}<br><small style="color:var(--faint)">${esc(d.status || "")}${d.stundenpositionen ? " · mit Stunden" : ""}</small></td><td>${eur(d.wert)}</td></tr>`).join("")}</table>` : "";
-  const phase = { final: "Abgeschlossen", zwischenstand: "Zwischenstand – Aufmaß noch nicht fertig", unvollstaendig: "Daten unvollständig", kein_aufmass: "Kein Aufmaß mit Stunden", fehler: "Fehler beim Rechnen" }[x.phase] || x.phase;
+  const phase = { final: "Abgeschlossen", zwischenstand: "Zwischenstand – Aufmaß noch nicht fertig", unvollstaendig: "Daten unvollständig", kein_aufmass: "Kein Aufmaß mit Stunden", ausgenommen: "Aus der Auswertung genommen", fehler: "Fehler beim Rechnen" }[x.phase] || x.phase;
+  const k = x.korrektur;
+  const korrBits = k ? [k.abrechnung === "nachweis" ? "Abrechnung nach Nachweis" : k.abrechnung === "pauschal" ? "Abrechnung pauschal" : "",
+    k.soll_nr ? `Soll festgelegt: ${k.soll_nr}` : "", k.ist_nr ? `Aufmaß festgelegt: ${k.ist_nr}` : "", k.ausschliessen ? "Aus der Auswertung genommen" : ""].filter(Boolean) : [];
+  const korr = `<div class="section"><span>Bewertung</span><button class="link-btn" id="naka-edit" style="padding:0;font-size:13px;text-transform:none;letter-spacing:0">Anpassen</button></div>
+    <div class="list"><div class="hint">${korrBits.length ? esc(korrBits.join(" · ")) : "Automatisch: pauschal, Soll und Aufmaß von der Zentrale gewählt"}${k?.notiz ? `<br><small style="color:var(--muted)">${esc(k.notiz)}</small>` : ""}</div></div>`;
   const zeit = x.erster_tag ? `${new Date(x.erster_tag + "T12:00:00").toLocaleDateString("de-DE")} – ${new Date(x.letzter_tag + "T12:00:00").toLocaleDateString("de-DE")}` : "";
   m.innerHTML = `<div class="naka-head"><h2><span class="dot ${nakaAmpel(x)}" style="display:inline-block;margin:0 8px 2px 0;vertical-align:middle"></span>${esc(nakaTitle(x))}</h2>
       <div class="d">${esc(phase)}${x.status && x.status !== phase ? " · Hero: " + esc(x.status) : ""}</div>
       <div class="d">${x.montagetage} Montagetage${zeit ? " · " + zeit : ""}</div></div>
-    ${table}${stdBox}${hints}${docList}
+    ${table}${korr}${stdBox}${hints}${docList}
     <button class="cta-row" id="naka-talk1"><span>Mit ${esc(agentName("cfo"))} besprechen</span><span>›</span></button>`;
   $("#naka-talk1").onclick = () => startAgent("cfo", `Lass uns die Nachkalkulation von ${x.project_nr} (${nakaTitle(x)}) besprechen. Was fällt dir auf, und was lernen wir daraus für die nächste Kalkulation?`);
+  $("#naka-edit").onclick = () => openNakaEdit(x);
+}
+
+// Bewertung einer Baustelle anpassen: Abrechnungsart, Soll-/Ist-Dokument, ausnehmen, Notiz
+function openNakaEdit(x) {
+  const k = x.korrektur || {};
+  const docs = (x.dokumente || []).filter((d) => d.nr && !/xxxx/i.test(d.nr) && !/gelöscht/i.test(d.status || ""));
+  const opt = (list, cur) => `<option value="">Automatisch</option>` + list.map((d) =>
+    `<option value="${esc(d.nr)}" ${cur === d.nr ? "selected" : ""}>${esc(d.typ)} ${esc(d.nr)} · ${eur(d.wert)}${d.stundenpositionen ? " · mit Stunden" : ""}</option>`).join("");
+  const root = $("#sheet-root");
+  root.innerHTML = `<div class="sheet-bg"><div class="sheet">
+    <div class="sheet-head"><button id="k-cancel">Abbrechen</button><h2>${esc(x.project_nr)} anpassen</h2><button id="k-save" class="strong">Sichern</button></div>
+    <p style="color:var(--muted);font-size:13.5px;margin:0 0 10px">Ändert nur die Bewertung in der Zentrale. In Hero bleibt alles, wie es ist.</p>
+    <div class="f"><label>Abrechnung</label><select id="k-abr">
+      <option value="">Pauschal (Standard)</option>
+      <option value="nachweis" ${k.abrechnung === "nachweis" ? "selected" : ""}>Nach Nachweis (Mehrstunden berechnet)</option></select></div>
+    <div class="f"><label>Soll (Angebot oder AB)</label><select id="k-soll">${opt(docs, k.soll_nr)}</select></div>
+    <div class="f"><label>Ist (Aufmaß)</label><select id="k-ist">${opt(docs.filter((d) => d.typ === "AB"), k.ist_nr)}</select></div>
+    <label style="display:flex;gap:10px;align-items:center;margin:4px 0 12px;font-size:14.5px"><input type="checkbox" id="k-aus" ${k.ausschliessen ? "checked" : ""} style="width:20px;height:20px"> Aus der Auswertung nehmen</label>
+    <div class="f"><label>Notiz (warum)</label><textarea id="k-notiz" placeholder="z. B. Montage auf Nachweis, Mehrstunden wurden berechnet">${esc(k.notiz || "")}</textarea></div>
+    ${x.korrektur ? `<button class="link-btn" id="k-del" style="color:var(--danger)">Anpassung entfernen</button>` : ""}
+  </div></div>`;
+  const close = () => (root.innerHTML = "");
+  root.querySelector(".sheet-bg").onclick = (e) => { if (e.target.classList.contains("sheet-bg")) close(); };
+  $("#k-cancel").onclick = close;
+  const neuRechnen = async () => {
+    const { error } = await sb.functions.invoke("nachkalkulation", { body: { action: "projekt", project_id: x.project_id } });
+    if (error) toast("Gespeichert, neu rechnen hat nicht geklappt");
+    await loadNaka(); render();
+  };
+  $("#k-save").onclick = async () => {
+    const b = $("#k-save"); b.disabled = true; b.textContent = "Rechne …";
+    const { data: { user } } = await sb.auth.getUser();
+    const row = { project_id: x.project_id, user_id: user.id, updated_at: new Date().toISOString(),
+      abrechnung: $("#k-abr").value || null, soll_nr: $("#k-soll").value || null, ist_nr: $("#k-ist").value || null,
+      ausschliessen: $("#k-aus").checked, notiz: $("#k-notiz").value.trim() || null };
+    const { error } = await sb.from("naka_korrekturen").upsert(row);
+    if (error) { toast("Speichern fehlgeschlagen: " + error.message); b.disabled = false; b.textContent = "Sichern"; return; }
+    await neuRechnen(); close(); toast("Angepasst und neu gerechnet");
+  };
+  if ($("#k-del")) $("#k-del").onclick = async () => {
+    await sb.from("naka_korrekturen").delete().eq("project_id", x.project_id);
+    await neuRechnen(); close(); toast("Anpassung entfernt");
+  };
 }
 
 // ============================================================
