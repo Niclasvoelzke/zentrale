@@ -365,8 +365,8 @@ const AGENTS = {
     quick: [["Tagesjournal", "Tagesjournal: Lass uns auf den heutigen Tag schauen."], ["Wochenrückblick", "Wochenrückblick: Was siehst du in meinen Einträgen dieser Woche?"], ["Entscheidung", "Ich stehe vor einer Entscheidung:"]] },
   investor: { name: "Viktor", label: "Investor", short: "Privates Vermögen und Investments", title: "Investor", intro: "Private Investments und Vermögen. Nenn Positionen und Werte, er pflegt die Übersicht und zeigt dir die nächsten Schritte.",
     quick: [["Überblick und nächste Schritte", "Gib mir einen Überblick über meine Investments und die nächsten sinnvollen Schritte."], ["Neue Position", "Ich möchte eine neue Position eintragen:"], ["Strategie klären", "Lass uns meine Anlagestrategie klären: Frag mich, was du dafür wissen musst."]] },
-  cfo: { name: "Richard", label: "CFO", short: "Finanzen der Unternehmensgruppe", title: "CFO", intro: "Strategische Finanzbegleitung aller Unternehmen der Gruppe: Liquidität, Ertrag, Finanzierung, Struktur.",
-    quick: [["Lagebesprechung", "Lass uns eine Lagebesprechung zur Gruppe machen. Was sind aus CFO-Sicht gerade die wichtigsten Themen, und welche Zahlen brauchst du von mir?"], ["Liquidität", "Hilf mir, eine einfache Liquiditätsplanung für die nächsten 3 Monate aufzusetzen."], ["Investition prüfen", "Ich überlege eine Investition und will sie mit dir durchrechnen:"]] },
+  cfo: { name: "Richard", label: "CFO", short: "Finanzen der Unternehmensgruppe", title: "CFO", intro: "Finanzbegleitung der Gruppe aus Sicht eines Unternehmers: gesund und stetig wachsen statt Zahlen polieren. Lade die BWA hoch, Richard liest sie einmal und merkt sich die Kennzahlen.",
+    quick: [["Lagebesprechung", "Lass uns eine Lagebesprechung zur Gruppe machen. Was sind aus CFO-Sicht gerade die wichtigsten Themen, und welche Zahlen brauchst du von mir?"], ["Liquidität", "Hilf mir, eine einfache Liquiditätsplanung für die nächsten 3 Monate aufzusetzen."], ["Investition prüfen", "Ich überlege eine Investition und will sie mit dir durchrechnen:"], ["BWA-Verlauf", "Wie entwickeln sich die Zahlen über die BWAs, die ich hochgeladen habe? Was läuft gesund, wo sind Warnsignale, und welche drei Hebel würdest du als Unternehmer jetzt angehen?"]] },
   hr: { name: "Paula", label: "HR", short: "Personal, Ausbildung, Gespräche", title: "HR", intro: "Personal im Betrieb: Gewinnung, Ausbildung, Rollen, Gespräche, Arbeitsrecht-Grundlagen.",
     quick: [["Stellenanzeige", "Schreib mir eine Stellenanzeige für:"], ["Gespräch vorbereiten", "Bereite mit mir ein Mitarbeitergespräch vor:"], ["Team-Struktur", "Lass uns über die Rollen und Verantwortlichkeiten im Team sprechen."]] },
   marketing: { name: "Mia", label: "Marketing", short: "Sichtbarkeit, Texte, Kampagnen", title: "Marketing", intro: "Sichtbarkeit für Betrieb und VölzControl: Ideen, Texte, Kampagnen – mit wenig Aufwand.",
@@ -425,6 +425,7 @@ const S = {
   msgs: {},            // Verlauf je Agent (aus der Datenbank)
   notes: {},
   investments: [],
+  bwa: [],             // hochgeladene BWAs (Kennzahlen, beim CFO)
   pending: null,       // gerade gesendete Nachricht
   names: {},           // eigene Agenten-Namen (Einstellungen)
   templates: {},       // Vorlagen je Agent
@@ -843,14 +844,16 @@ function viewAreas(m) {
 // Agenten
 // ============================================================
 async function loadAgent(agent) {
-  const [m, n, inv] = await Promise.all([
+  const [m, n, inv, bw] = await Promise.all([
     sb.from("messages").select("id,role,content,actions,created_at").eq("agent", agent).order("created_at", { ascending: false }).limit(60),
     sb.from("agent_notes").select("id,agent,content,created_at").in("agent", [agent, "gemeinsam"]).order("created_at"),
     agent === "investor" ? sb.from("investments").select("*").order("kind").order("name") : Promise.resolve({ data: null }),
+    agent === "cfo" ? sb.from("bwa").select("id,gesellschaft,monat,kennzahlen,datei,updated_at").order("monat", { ascending: false }).limit(36) : Promise.resolve({ data: null }),
   ]);
   if (!m.error) S.msgs[agent] = (m.data || []).reverse();
   if (!n.error) S.notes[agent] = n.data || [];
   if (inv.data) S.investments = inv.data;
+  if (bw.data) S.bwa = bw.data;
 }
 const agentName = (k) => S.names[k] || AGENTS[k].name;
 async function loadSettings() {
@@ -989,11 +992,20 @@ function viewAgents(m) {
     const n = S.naka || [];
     const fin = n.filter((x) => x.phase === "final").length, lauf = n.filter((x) => x.phase === "zwischenstand").length;
     h += `<button class="cta-row" id="to-naka"><span>Nachkalkulation${S.naka ? ` · ${fin} fertig, ${lauf} laufend` : ""}</span><span>›</span></button>`;
+    const bw = S.bwa || [];
+    const kum = (b) => b.kennzahlen?.kumuliert || {};
+    const gl = (w) => w.gesamtleistung ?? w.umsatzerloese;
+    h += `<details class="depot" style="margin-top:8px"><summary><span>BWA · ${bw.length ? plural(bw.length, "Monat", "Monate") : "noch keine"}</span><span>${bw[0] ? esc(fmtMonat(bw[0].monat)) : ""}</span></summary>
+      ${bw.length ? bw.map((b) => `<div class="pos"><span>${esc(fmtMonat(b.monat))}<small>${esc(b.gesellschaft)}</small></span>
+        <span style="text-align:right">${eur(gl(kum(b)))}<small>Ergebnis ${eur(kum(b).betriebsergebnis)}</small></span></div>`).join("")
+        : `<div class="pos"><span style="color:var(--muted)">Lade die BWA als PDF hoch. ${esc(agentName("cfo"))} liest sie einmal, merkt sich die Zahlen und vergleicht sie mit den Vormonaten.</span></div>`}
+    </details>`;
   }
 
   h += `<div class="pillrow">
     ${hasSR() ? `<button id="vtalk" class="pill talk">${ICON_WAVE}Sprechen</button>` : ""}
     <button id="notes" class="pill">Gemerktes ${(S.notes[a] || []).length}</button>
+    ${a === "cfo" ? `<label class="pill" style="cursor:pointer">BWA hochladen<input id="bwa-file" type="file" accept="application/pdf,image/*" style="display:none"></label>` : ""}
     ${cloudTTS ? `<button id="vpick" class="pill">Stimme${S.voices[a] ? ": " + esc(S.voices[a].name) : ""}</button>` : ""}
     <button id="tpl" class="pill ${S.templates[a] ? "on" : ""}">${S.templates[a] ? "Vorlage aktiv" : "Vorlage"}</button>
   </div>`;
@@ -1024,6 +1036,7 @@ function viewAgents(m) {
   m.innerHTML = h;
 
   if ($("#to-naka")) $("#to-naka").onclick = () => openNaka("cfo");
+  if ($("#bwa-file")) $("#bwa-file").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) uploadBwa(f); };
   m.querySelectorAll("[data-q]").forEach((b) => b.onclick = () => {
     const text = quick[+b.dataset.q][1];
     if (text.endsWith(":")) { const cap = $("#cap"); cap.value = text + " "; cap.focus(); cap.dispatchEvent(new Event("input")); }
@@ -1834,6 +1847,27 @@ async function askPersona(text) {
     await loadAgent(agent); render();
     const cap = $("#cap"); if (!cap.value) { cap.value = text; cap.dispatchEvent(new Event("input")); }
     toast("Keine Antwort: " + String(e.message || e).slice(0, 80));
+  } finally {
+    busy = false; $("#send").disabled = false;
+  }
+}
+// BWA hochladen: einmal auslesen lassen, Kennzahlen werden gespeichert, danach wertet Richard sie aus
+const fmtMonat = (d) => new Date(String(d).slice(0, 10) + "T12:00:00").toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+async function uploadBwa(file) {
+  if (busy) return;
+  busy = true; $("#send").disabled = true; stopSpeaking(); stopListening();
+  S.pending = { agent: "cfo", text: `BWA wird gelesen: ${file.name}` }; render(); scrollChat();
+  try {
+    const payload = await fileToPayload(file);
+    const { data, error } = await sb.functions.invoke("agent", { body: { agent: "cfo", message: "", bwa: { ...payload, name: file.name } } });
+    if (error || data?.error) throw new Error(data?.error || (await errText(error)));
+    S.pending = null;
+    await loadAgent("cfo");
+    if (inChat() && S.agent === "cfo") { render(); scrollChat(); }
+    if (data.bwa) toast(`BWA ${fmtMonat(data.bwa.monat + "-01")} gespeichert`);
+  } catch (e) {
+    S.pending = null; await loadAgent("cfo"); render();
+    toast("BWA nicht gelesen: " + String(e.message || e).slice(0, 90));
   } finally {
     busy = false; $("#send").disabled = false;
   }
